@@ -2,15 +2,18 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/golang/glog"
 	flag "github.com/spf13/pflag"
 
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/unversioned"
 	kubectl_util "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/util"
-	"k8s.io/kubernetes/pkg/util/exec"
+	k8sexec "k8s.io/kubernetes/pkg/util/exec"
+	"k8s.io/kubernetes/pkg/util/node"
 )
 
 var (
@@ -64,11 +67,52 @@ func main() {
 	// if the cluster has more than one node we start ExaBGP to announce
 	// periodically that the VIP/s are running in this node
 	// TODO: use watch to avoid kill the node.
+	clusterNodes := []string{}
+	nodes, err := kubeClient.Nodes().List(api.ListOptions{})
+	for _, nodo := range nodes.Items {
+		nodeIP, err := node.GetNodeHostIP(&nodo)
+		if err == nil {
+			clusterNodes = append(clusterNodes, nodeIP.String())
+		}
+	}
 
+	if len(clusterNodes) > 1 {
+		glog.Info("starting BGP server to announce VIPs")
+
+		ip, err := myIP()
+		if err != nil {
+			glog.Fatalf("Error creating exabgp files: %v", err)
+		}
+
+		err = writeBGPCfg(ip, clusterNodes)
+		if err != nil {
+			glog.Fatalf("Error creating exabgp files: %v", err)
+		}
+
+		err = writeHealthcheck(ipvsc.getVIPs())
+		if err != nil {
+			glog.Fatalf("Error creating exabgp files: %v", err)
+		}
+
+		startBGPServer()
+	}
+}
+
+func startBGPServer() {
+	cmd := exec.Command("exabgp", "/etc/exabgp/exabgp.conf")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		glog.Errorf("exabgp error: %v", err)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		glog.Fatalf("exabgp error: %v", err)
+	}
 }
 
 func loadIPVModule() error {
-	out, err := exec.New().Command("modprobe", "ip_vs").CombinedOutput()
+	out, err := k8sexec.New().Command("modprobe", "ip_vs").CombinedOutput()
 	if err != nil {
 		glog.V(2).Infof("Error loading ip_vip: %s, %v", string(out), err)
 		return err

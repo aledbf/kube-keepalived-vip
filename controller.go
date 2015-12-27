@@ -90,6 +90,20 @@ func getServiceNameForLBRule(s *api.Service, servicePort int) string {
 }
 
 // getServices returns a list of services and their endpoints.
+func (ipvsc *ipvsControllerController) getVIPs() (vips []string) {
+	vips = []string{}
+
+	services, _ := ipvsc.svcLister.List()
+	for _, s := range services.Items {
+		if externalIP, ok := s.GetAnnotations()[ipvsPublicVIP]; ok {
+			vips = append(vips, externalIP)
+		}
+	}
+
+	return
+}
+
+// getServices returns a list of services and their endpoints.
 func (ipvsc *ipvsControllerController) getServices() (svcs *clusterf.Services) {
 	svcs = clusterf.NewServices()
 
