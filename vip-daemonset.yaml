@@ -1,0 +1,31 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: kube-bgp-vip
+spec:
+  selector: {}
+  template:
+    metadata:
+      labels:
+        name: kube-bgp-vip
+    spec:
+      hostNetwork: true
+      containers:
+        - image: aledbf/kube-bgp-vip:0.1
+          name: kube-bgp-vip
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /lib/modules
+              name: modules
+              readOnly: true
+            - mountPath: /dev
+              name: dev          
+      volumes:
+        - name: modules
+          hostPath:
+            path: /lib/modules
+        - name: dev
+          hostPath:
+            path: /dev
