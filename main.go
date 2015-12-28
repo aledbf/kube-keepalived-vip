@@ -22,15 +22,15 @@ var (
 	cluster = flags.Bool("use-kubernetes-cluster-service", true, `If true, use the built in kubernetes
         cluster for creating the client`)
 
-	verbose = flags.Bool("v", false, `enable verbose output`)
+	logLevel = flags.Int("v", 1, `verbose output`)
 )
 
 func main() {
 	clientConfig := kubectl_util.DefaultClientConfig(flags)
 	flags.Parse(os.Args)
 
-	var kubeClient *unversioned.Client
 	var err error
+	var kubeClient *unversioned.Client
 
 	if *cluster {
 		if kubeClient, err = unversioned.NewInCluster(); err != nil {
@@ -45,7 +45,6 @@ func main() {
 	}
 
 	namespace, specified, err := clientConfig.Namespace()
-
 	if err != nil {
 		glog.Fatalf("unexpected error: %v", err)
 	}
@@ -59,16 +58,24 @@ func main() {
 		glog.Fatalf("Error loading ip_vs module: %v", err)
 	}
 
+	glog.Info("starting LVS configuration")
 	ipvsc := newIPVSController(kubeClient, namespace)
 	go ipvsc.epController.Run(util.NeverStop)
 	go ipvsc.svcController.Run(util.NeverStop)
-	util.Until(ipvsc.worker, time.Second, util.NeverStop)
+	go util.Until(ipvsc.worker, time.Second, util.NeverStop)
 
-	// if the cluster has more than one node we start ExaBGP to announce
-	// periodically that the VIP/s are running in this node
-	// TODO: use watch to avoid kill the node.
+	time.Sleep(5 * time.Second)
+
+	// if the cluster has more than one node we start ExaBGP to
+	// announce periodically that the VIP/s are running in this node
+	// TODO: use watch to avoid kill the pods to add new neighbor
+	glog.Info("checking if is required to start exabgp")
 	clusterNodes := []string{}
 	nodes, err := kubeClient.Nodes().List(api.ListOptions{})
+	if err != nil {
+		glog.Fatalf("Error getting nodes: %v", err)
+	}
+
 	for _, nodo := range nodes.Items {
 		nodeIP, err := node.GetNodeHostIP(&nodo)
 		if err == nil {
@@ -78,28 +85,39 @@ func main() {
 
 	if len(clusterNodes) > 1 {
 		glog.Info("starting BGP server to announce VIPs")
-
-		ip, err := myIP()
+		ip, err := myIP(clusterNodes)
 		if err != nil {
 			glog.Fatalf("Error creating exabgp files: %v", err)
 		}
 
-		err = writeBGPCfg(ip, clusterNodes)
+		neighbors := []string{}
+		for _, neighbor := range clusterNodes {
+			if ip != neighbor {
+				neighbors = append(neighbors, neighbor)
+			}
+		}
+
+		err = writeBGPCfg(ip, neighbors)
 		if err != nil {
 			glog.Fatalf("Error creating exabgp files: %v", err)
 		}
 
-		err = writeHealthcheck(ipvsc.getVIPs())
+		err = writeHealthcheck(ip, ipvsc.getVIPs())
 		if err != nil {
 			glog.Fatalf("Error creating exabgp files: %v", err)
 		}
 
-		startBGPServer()
+		go startBGPServer()
+	}
+
+	// TODO: replace loop
+	for {
+		time.Sleep(3600 * time.Second)
 	}
 }
 
 func startBGPServer() {
-	cmd := exec.Command("exabgp", "/etc/exabgp/exabgp.conf")
+	cmd := exec.Command("exabgp", "/exabgp.conf")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

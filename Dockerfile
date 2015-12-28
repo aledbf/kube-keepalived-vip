@@ -11,8 +11,6 @@ RUN pip install exabgp
 
 COPY kube-bgp-vip /kube-bgp-vip
 
-COPY bgp/healthcheck.templ /healthcheck.templ
-COPY bgp/exabgp.templ /exabgp.templ
 COPY bgp/exabgp.env /usr/etc/exabgp/exabgp.env
 
 ENTRYPOINT ["/kube-bgp-vip"]

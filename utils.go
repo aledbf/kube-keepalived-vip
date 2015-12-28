@@ -6,13 +6,13 @@ import (
 	"net"
 )
 
-func myIP() (string, error) {
+func myIP(nodes []string) (string, error) {
 	maxIface := 5
 	var err error
 	for i := 0; i < maxIface; i++ {
 		var ip string
 		ip, err = IPByInterface(fmt.Sprintf("eth%d", i))
-		if err == nil {
+		if err == nil && stringSlice(nodes).pos(ip) != -1 {
 			return ip, nil
 		}
 	}
@@ -41,4 +41,15 @@ func IPByInterface(name string) (string, error) {
 		return ip, errors.New("Found no IPv4 addresses.")
 	}
 	return ip, nil
+}
+
+type stringSlice []string
+
+func (slice stringSlice) pos(value string) int {
+	for p, v := range slice {
+		if v == value {
+			return p
+		}
+	}
+	return -1
 }

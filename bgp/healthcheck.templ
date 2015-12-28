@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-
-while true; do
-  {{ range $i, $vip := range .vips }}
-    echo "announce {{ $vip }}/32 next-hop self"
-  {{ end }}
-  sleep 5
-done

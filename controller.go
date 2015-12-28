@@ -89,23 +89,24 @@ func getServiceNameForLBRule(s *api.Service, servicePort int) string {
 	return fmt.Sprintf("%v:%v", s.Name, servicePort)
 }
 
-// getServices returns a list of services and their endpoints.
-func (ipvsc *ipvsControllerController) getVIPs() (vips []string) {
-	vips = []string{}
+// getVIPs returns list of virtual IPs to expose.
+func (ipvsc *ipvsControllerController) getVIPs() []string {
+	vips := []string{}
 
 	services, _ := ipvsc.svcLister.List()
 	for _, s := range services.Items {
 		if externalIP, ok := s.GetAnnotations()[ipvsPublicVIP]; ok {
+			glog.Infof("Service %v contains public-vip annotation", s.Name)
 			vips = append(vips, externalIP)
 		}
 	}
 
-	return
+	return vips
 }
 
 // getServices returns a list of services and their endpoints.
-func (ipvsc *ipvsControllerController) getServices() (svcs *clusterf.Services) {
-	svcs = clusterf.NewServices()
+func (ipvsc *ipvsControllerController) getServices() *clusterf.Services {
+	svcs := clusterf.NewServices()
 
 	services, _ := ipvsc.svcLister.List()
 	for _, s := range services.Items {
@@ -140,7 +141,7 @@ func (ipvsc *ipvsControllerController) getServices() (svcs *clusterf.Services) {
 		}
 	}
 
-	return
+	return svcs
 }
 
 // sync all services with the loadbalancer.
