@@ -2,22 +2,46 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net"
+	"regexp"
+)
+
+const (
+	vethRegex = "^veth.*"
+)
+
+var (
+	invalidIfaces = []string{"lo", "docker0", "flannel.1"}
 )
 
 func myIP(nodes []string) (string, error) {
-	maxIface := 5
 	var err error
-	for i := 0; i < maxIface; i++ {
-		var ip string
-		ip, err = IPByInterface(fmt.Sprintf("eth%d", i))
+	for _, iface := range netInterfaces() {
+		ip, err := IPByInterface(iface.Name)
 		if err == nil && stringSlice(nodes).pos(ip) != -1 {
 			return ip, nil
 		}
 	}
 
 	return "0.0.0.0", err
+}
+
+func netInterfaces() []net.Interface {
+	r, _ := regexp.Compile(vethRegex)
+
+	validIfaces := []net.Interface{}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return validIfaces
+	}
+
+	for _, iface := range ifaces {
+		if !r.MatchString(iface.Name) && stringSlice(invalidIfaces).pos(iface.Name) == -1 {
+			validIfaces = append(validIfaces, iface)
+		}
+	}
+
+	return validIfaces
 }
 
 func IPByInterface(name string) (string, error) {
