@@ -1,16 +1,13 @@
 FROM alpine:3.2
 
-RUN apk add -U --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ \
-  --allow-untrusted \
-  bash curl ipvsadm iproute2 python-dev && \  
-  rm -rf /var/cache/apk/*
+COPY keepalived.apk /var/cache/apk/keepalived.apk
 
-RUN curl -sSL https://raw.githubusercontent.com/pypa/pip/7.1.2/contrib/get-pip.py | python -
+RUN apk add -U --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ --allow-untrusted \
+  bash curl ipvsadm iproute2 && \
+  apk add --allow-untrusted /var/cache/apk/keepalived.apk && \
+  rm -rf /var/cache/apk/* && \
+  mkdir -p /etc/keepalived
 
-RUN pip install exabgp
+COPY kube-keepalived-vip /kube-keepalived-vip
 
-COPY kube-bgp-vip /kube-bgp-vip
-
-COPY bgp/exabgp.env /usr/etc/exabgp/exabgp.env
-
-ENTRYPOINT ["/kube-bgp-vip"]
+ENTRYPOINT ["/kube-keepalived-vip"]
