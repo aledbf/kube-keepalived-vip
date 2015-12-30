@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/qmsk/clusterf"
-	clusterf_cfg "github.com/qmsk/clusterf/config"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/unversioned"
@@ -15,6 +15,7 @@ import (
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/intstr"
+	"k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 )
 
@@ -32,6 +33,19 @@ var (
 	errDeferredSync = fmt.Errorf("deferring sync till endpoints controller has synced")
 )
 
+type service struct {
+	Ip   string
+	Port int
+}
+
+type vip struct {
+	Name     string
+	Ip       string
+	Port     int
+	Protocol string
+	Backends []service
+}
+
 // ipvsControllerController watches the kubernetes api and adds/removes
 // services from LVS throgh ipvsadmin.
 type ipvsControllerController struct {
@@ -42,12 +56,13 @@ type ipvsControllerController struct {
 	svcLister         cache.StoreToServiceLister
 	epLister          cache.StoreToEndpointsLister
 	reloadRateLimiter util.RateLimiter
-	ipvsConfig        clusterf.IpvsConfig
+	keepalived        *keepalived
+	reloadLock        *sync.Mutex
 }
 
 // getEndpoints returns a list of <endpoint ip>:<port> for a given service/target port combination.
 func (ipvsc *ipvsControllerController) getEndpoints(
-	s *api.Service, servicePort *api.ServicePort) (endpoints []*clusterf_cfg.ConfigServiceBackend) {
+	s *api.Service, servicePort *api.ServicePort) (endpoints []service) {
 	ep, err := ipvsc.epLister.GetServiceEndpoints(s)
 	if err != nil {
 		return
@@ -58,35 +73,26 @@ func (ipvsc *ipvsControllerController) getEndpoints(
 	// the target port are capable of service traffic for it.
 	for _, ss := range ep.Subsets {
 		for _, epPort := range ss.Ports {
-			var targetPort uint16
+			var targetPort int
 			switch servicePort.TargetPort.Type {
 			case intstr.Int:
 				if epPort.Port == servicePort.TargetPort.IntValue() {
-					targetPort = uint16(epPort.Port)
+					targetPort = epPort.Port
 				}
 			case intstr.String:
 				if epPort.Name == servicePort.TargetPort.StrVal {
-					targetPort = uint16(epPort.Port)
+					targetPort = epPort.Port
 				}
 			}
 			if targetPort == 0 {
 				continue
 			}
 			for _, epAddress := range ss.Addresses {
-				endpoints = append(endpoints, &clusterf_cfg.ConfigServiceBackend{
-					ConfigSource: "k8s",
-					ServiceName:  fmt.Sprintf("%v/%v", s.Namespace, s.Name),
-					BackendName:  fmt.Sprintf("pod-%v", epAddress.IP),
-					Backend:      clusterf_cfg.ServiceBackend{IPv4: epAddress.IP, TCP: targetPort},
-				})
+				endpoints = append(endpoints, service{Ip: epAddress.IP, Port: targetPort})
 			}
 		}
 	}
 	return
-}
-
-func getServiceNameForLBRule(s *api.Service, servicePort int) string {
-	return fmt.Sprintf("%v:%v", s.Name, servicePort)
 }
 
 // getVIPs returns list of virtual IPs to expose.
@@ -105,17 +111,12 @@ func (ipvsc *ipvsControllerController) getVIPs() []string {
 }
 
 // getServices returns a list of services and their endpoints.
-func (ipvsc *ipvsControllerController) getServices() *clusterf.Services {
-	svcs := clusterf.NewServices()
+func (ipvsc *ipvsControllerController) getServices() []vip {
+	svcs := []vip{}
 
 	services, _ := ipvsc.svcLister.List()
 	for _, s := range services.Items {
 		if externalIP, ok := s.GetAnnotations()[ipvsPublicVIP]; ok {
-			svcs.NewConfig(&clusterf_cfg.ConfigService{
-				ConfigSource: "k8s",
-				ServiceName:  fmt.Sprintf("%v/%v", s.Namespace, s.Name),
-			})
-
 			for _, servicePort := range s.Spec.Ports {
 				ep := ipvsc.getEndpoints(&s, &servicePort)
 				if len(ep) == 0 {
@@ -123,19 +124,13 @@ func (ipvsc *ipvsControllerController) getServices() *clusterf.Services {
 					continue
 				}
 
-				svcs.NewConfig(&clusterf_cfg.ConfigServiceFrontend{
-					ConfigSource: "k8s",
-					ServiceName:  fmt.Sprintf("%v/%v", s.Namespace, s.Name),
-					Frontend: clusterf_cfg.ServiceFrontend{
-						IPv4: externalIP,
-						TCP:  uint16(servicePort.Port),
-					},
+				svcs = append(svcs, vip{
+					Name:     fmt.Sprintf("%v/%v", s.Namespace, s.Name),
+					Ip:       externalIP,
+					Port:     servicePort.Port,
+					Backends: ep,
+					Protocol: fmt.Sprintf("%v", servicePort.Protocol),
 				})
-
-				for _, backend := range ep {
-					svcs.NewConfig(backend)
-				}
-
 				glog.Infof("Found service: %v", s.Name)
 			}
 		}
@@ -146,15 +141,18 @@ func (ipvsc *ipvsControllerController) getServices() *clusterf.Services {
 
 // sync all services with the loadbalancer.
 func (ipvsc *ipvsControllerController) sync() error {
+	ipvsc.reloadLock.Lock()
+	defer ipvsc.reloadLock.Unlock()
+
 	if !ipvsc.epController.HasSynced() || !ipvsc.svcController.HasSynced() {
 		time.Sleep(100 * time.Millisecond)
 		return errDeferredSync
 	}
 
-	svcs := ipvsc.getServices()
-	_, err := svcs.SyncIPVS(ipvsc.ipvsConfig)
+	ipvsc.keepalived.WriteCfg(ipvsc.getServices())
+	err := ipvsc.keepalived.Reload()
 	if err != nil {
-		return err
+		glog.Errorf("%v", err)
 	}
 
 	ipvsc.reloadRateLimiter.Accept()
@@ -175,16 +173,53 @@ func (ipvsc *ipvsControllerController) worker() {
 }
 
 // newIPVSController creates a new controller from the given config.
-func newIPVSController(kubeClient *unversioned.Client, namespace string) *ipvsControllerController {
+func newIPVSController(kubeClient *unversioned.Client, namespace, iface string) *ipvsControllerController {
 	ipvsc := ipvsControllerController{
-		client: kubeClient,
-		queue:  workqueue.New(),
-		reloadRateLimiter: util.NewTokenBucketRateLimiter(
-			reloadQPS, int(reloadQPS)),
-		ipvsConfig: clusterf.IpvsConfig{
-			FwdMethod: "masq", // droute
-			SchedName: "wlc",
-		},
+		client:            kubeClient,
+		queue:             workqueue.New(),
+		reloadRateLimiter: util.NewTokenBucketRateLimiter(reloadQPS, int(reloadQPS)),
+		reloadLock:        &sync.Mutex{},
+	}
+
+	clusterNodes := []string{}
+	nodes, err := kubeClient.Nodes().List(api.ListOptions{})
+	if err != nil {
+		glog.Fatalf("Error getting nodes: %v", err)
+	}
+
+	for _, nodo := range nodes.Items {
+		nodeIP, err := node.GetNodeHostIP(&nodo)
+		if err == nil {
+			clusterNodes = append(clusterNodes, nodeIP.String())
+		}
+	}
+	sort.Strings(clusterNodes)
+
+	ip, err := myIP(clusterNodes)
+	if err != nil {
+		glog.Fatalf("Error getting local IP from nodes in the cluster: %v", err)
+	}
+
+	neighbors := []string{}
+	for _, neighbor := range clusterNodes {
+		if ip != neighbor {
+			neighbors = append(neighbors, neighbor)
+		}
+	}
+	sort.Strings(neighbors)
+
+	if iface == "" {
+		iface = interfaceByIP(ip)
+	}
+
+	ipvsc.keepalived = &keepalived{
+		iface:      iface,
+		ip:         ip,
+		netmask:    maskForIP(ip),
+		nodes:      clusterNodes,
+		neighbors:  neighbors,
+		priority:   getPriority(ip, clusterNodes),
+		runningCfg: []vip{},
 	}
 
 	enqueue := func(obj interface{}) {
@@ -218,4 +253,10 @@ func newIPVSController(kubeClient *unversioned.Client, namespace string) *ipvsCo
 		&api.Endpoints{}, resyncPeriod, eventHandlers)
 
 	return &ipvsc
+}
+
+// getPriority returns the priority of one node using the
+// IP address as key. It starts in 100
+func getPriority(ip string, nodes []string) int {
+	return 100 + stringSlice(nodes).pos(ip)
 }

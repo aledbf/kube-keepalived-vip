@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net"
 	"regexp"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -17,12 +19,13 @@ var (
 func myIP(nodes []string) (string, error) {
 	var err error
 	for _, iface := range netInterfaces() {
-		ip, err := IPByInterface(iface.Name)
+		ip, _, err := ipByInterface(iface.Name)
 		if err == nil && stringSlice(nodes).pos(ip) != -1 {
 			return ip, nil
 		}
 	}
 
+	glog.Errorf("error getting local IP: %v", err)
 	return "0.0.0.0", err
 }
 
@@ -44,27 +47,51 @@ func netInterfaces() []net.Interface {
 	return validIfaces
 }
 
-func IPByInterface(name string) (string, error) {
+func interfaceByIP(ip string) string {
+	for _, iface := range netInterfaces() {
+		ifaceIP, _, err := ipByInterface(iface.Name)
+		if err == nil && ip == ifaceIP {
+			return iface.Name
+		}
+	}
+
+	return ""
+}
+
+func maskForIP(ip string) int {
+	for _, iface := range netInterfaces() {
+		ifaceIP, mask, err := ipByInterface(iface.Name)
+		if err == nil && ip == ifaceIP {
+			return mask
+		}
+	}
+
+	return 32
+}
+
+func ipByInterface(name string) (string, int, error) {
 	iface, err := net.InterfaceByName(name)
 	if err != nil {
-		return "", err
+		return "", 32, err
 	}
+
 	addrs, err := iface.Addrs()
 	if err != nil {
-		return "", err
+		return "", 32, err
 	}
-	var ip string
+
 	for _, a := range addrs {
 		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
-				ip = ipnet.IP.String()
+				ip := ipnet.IP.String()
+				ones, _ := ipnet.Mask.Size()
+				mask := ones
+				return ip, mask, nil
 			}
 		}
 	}
-	if len(ip) == 0 {
-		return ip, errors.New("Found no IPv4 addresses.")
-	}
-	return ip, nil
+
+	return "", 32, errors.New("Found no IPv4 addresses.")
 }
 
 type stringSlice []string
