@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"reflect"
 	"text/template"
 
 	"github.com/golang/glog"
@@ -34,6 +33,7 @@ vrrp_instance vips {
     {{ $iface }}
   }
 
+  # TODO: use unicast instead multicast
   #unicast_src_ip {{ .myIP }}
   #unicast_peer { {{ range $i, $node := .nodes }}
   #  {{ $node }}{{ end }}
@@ -84,11 +84,6 @@ type keepalived struct {
 }
 
 func (k *keepalived) WriteCfg(svcs []vip) error {
-	if reflect.DeepEqual(k.runningCfg, svcs) {
-		glog.Info("omiting keepalived update")
-		return nil
-	}
-
 	k.runningCfg = svcs
 
 	w, err := os.Create("/etc/keepalived/keepalived.conf")
@@ -144,10 +139,6 @@ func (k *keepalived) Reload() error {
 	}
 
 	return nil
-}
-
-func (k *keepalived) Stop() {
-
 }
 
 // getSha returns a sha1 of the list of nodes in the cluster
