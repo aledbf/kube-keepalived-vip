@@ -1,7 +1,7 @@
 # kube-keepalived-vip
 Kubernetes Virtual IP address/es using [keepalived](http://www.keepalived.org)
 
-AKA "how to set up virtual IP addresses in kubernetes using [ipvs](IPVS - The Linux Virtual Server Project)".
+AKA "how to set up virtual IP addresses in kubernetes using [IPVS - The Linux Virtual Server Project](http://www.linuxvirtualserver.org/software/ipvs.html)".
 
 ## Disclaimer:
 - This is a **work in progress**.
@@ -19,15 +19,24 @@ The issue is that it does not provide High Availability because beforehand is re
 The idea is to define an IP address per service to expose it outside the Kubernetes cluster and use vrrp to announce this "mapping" in the local network.
 With 2 or more instance of the pod running in the cluster is possible to provide high availabity using a single IP address.
 
+##### What is the difference between this and [service-loadbalancer](https://github.com/kubernetes/contrib/tree/master/service-loadbalancer) or [nginx-alpha](https://github.com/kubernetes/contrib/tree/master/Ingress/controllers/nginx-alpha) to expose one or more services?
+
+This should be considered a complement, not a replacement for HAProxy or nginx. The goal using keepalived is to provide high availability and to bring certainty about how an exposed service can be reached. For instance keepalived can use used to expose the service-loadbalancer or nginx ingress controller in the LAN using one IP address.
+
+
 
 ## Requirements
 
-[Daemonsets](https://github.com/kubernetes/kubernetes/blob/master/docs/design/daemon.md) enabled is the only requirement. Check this [guide](https://github.com/kubernetes/kubernetes/blob/master/docs/api.md#enabling-resources-in-the-extensions-group)
+[Daemonsets](https://github.com/kubernetes/kubernetes/blob/master/docs/design/daemon.md) enabled is the only requirement. Check this [guide](https://github.com/kubernetes/kubernetes/blob/master/docs/api.md#enabling-resources-in-the-extensions-group) with the required flags in kube-apiserver.
+
+
 
 ## Configuration
 
 To expose a service add the annotation `k8s.io/public-vip` in the service with the IP address to be use. This IP must be routable inside the LAN and must be available.
 By default the IP address of the pods are used to route the traffic. This means that is one pod dies or a new one is created by a scale event the keepalived configuration file will be updated and reloaded.
+
+
 
 ## Example
 
@@ -189,13 +198,6 @@ vrrp_instance vips {
     enp3s0
   }
 
-  # TODO: use unicast instead multicast
-  #unicast_src_ip 10.4.0.3
-  #unicast_peer {
-  #  10.4.0.4
-  #  10.4.0.5
-  #}
-
   virtual_ipaddress {
     10.4.0.50
   }
@@ -294,13 +296,6 @@ vrrp_instance vips {
     enp3s0
   }
 
-  # TODO: use unicast instead multicast
-  #unicast_src_ip 10.4.0.4
-  #unicast_peer {
-  #  10.4.0.3
-  #  10.4.0.5
-  #}
-
   virtual_ipaddress {
     10.4.0.50
   }
@@ -367,10 +362,10 @@ virtual_server 10.4.0.50 80 {
 
 
 ## TODO
-- option to choose wich IP should be used (kuberneted VIP or pod IP)
+- option to choose wich IP should be used (kubernetes VIP or pod IP)
 - custom weight?
 - quorum rules
-- use unicast instead multicast
+- unicast instead multicast
 
 ## Related projects
 

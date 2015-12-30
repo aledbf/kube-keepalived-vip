@@ -33,12 +33,6 @@ vrrp_instance vips {
     {{ $iface }}
   }
 
-  # TODO: use unicast instead multicast
-  #unicast_src_ip {{ .myIP }}
-  #unicast_peer { {{ range $i, $node := .nodes }}
-  #  {{ $node }}{{ end }}
-  #}
-
   virtual_ipaddress { {{ range $i, $svc := .svcs }}
     {{ $svc.Ip }}
   {{ end }}}    
@@ -74,18 +68,15 @@ virtual_server {{ $svc.Ip }} {{ $svc.Port }} {
 )
 
 type keepalived struct {
-	iface      string
-	ip         string
-	netmask    int
-	priority   int
-	nodes      []string
-	neighbors  []string
-	runningCfg []vip
+	iface     string
+	ip        string
+	netmask   int
+	priority  int
+	nodes     []string
+	neighbors []string
 }
 
 func (k *keepalived) WriteCfg(svcs []vip) error {
-	k.runningCfg = svcs
-
 	w, err := os.Create("/etc/keepalived/keepalived.conf")
 	if err != nil {
 		return err

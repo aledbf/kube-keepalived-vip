@@ -11,8 +11,6 @@ import (
 	"k8s.io/kubernetes/pkg/client/unversioned"
 	kubectl_util "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/util"
-	k8sexec "k8s.io/kubernetes/pkg/util/exec"
-	"k8s.io/kubernetes/pkg/util/sysctl"
 )
 
 var (
@@ -20,8 +18,6 @@ var (
 
 	cluster = flags.Bool("use-kubernetes-cluster-service", true, `If true, use the built in kubernetes
         cluster for creating the client`)
-
-	iface = flags.String("interface", "", `Local network interface where to bind the vitual IP address/es`)
 
 	logLevel = flags.Int("v", 1, `verbose output`)
 
@@ -72,7 +68,7 @@ func main() {
 	proc.StartReaper()
 
 	glog.Info("starting LVS configuration")
-	ipvsc := newIPVSController(kubeClient, namespace, *iface)
+	ipvsc := newIPVSController(kubeClient, namespace)
 	go ipvsc.epController.Run(util.NeverStop)
 	go ipvsc.svcController.Run(util.NeverStop)
 	go util.Until(ipvsc.worker, time.Second, util.NeverStop)
@@ -80,29 +76,4 @@ func main() {
 	time.Sleep(5 * time.Second)
 	glog.Info("starting keepalived to announce VIPs")
 	ipvsc.keepalived.Start()
-}
-
-func loadIPVModule() error {
-	out, err := k8sexec.New().Command("modprobe", "ip_vs").CombinedOutput()
-	if err != nil {
-		glog.V(2).Infof("Error loading ip_vip: %s, %v", string(out), err)
-		return err
-	}
-
-	_, err = os.Stat("/proc/net/ip_vs")
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func changeSysctl() error {
-	for k, v := range sysctlAdjustments {
-		if err := sysctl.SetSysctl(k, v); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

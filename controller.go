@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"reflect"
-	"sort"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
+
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/client/unversioned"
@@ -15,7 +15,6 @@ import (
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/util/workqueue"
 )
 
@@ -173,7 +172,7 @@ func (ipvsc *ipvsControllerController) worker() {
 }
 
 // newIPVSController creates a new controller from the given config.
-func newIPVSController(kubeClient *unversioned.Client, namespace, iface string) *ipvsControllerController {
+func newIPVSController(kubeClient *unversioned.Client, namespace string) *ipvsControllerController {
 	ipvsc := ipvsControllerController{
 		client:            kubeClient,
 		queue:             workqueue.New(),
@@ -181,45 +180,22 @@ func newIPVSController(kubeClient *unversioned.Client, namespace, iface string) 
 		reloadLock:        &sync.Mutex{},
 	}
 
-	clusterNodes := []string{}
-	nodes, err := kubeClient.Nodes().List(api.ListOptions{})
-	if err != nil {
-		glog.Fatalf("Error getting nodes: %v", err)
-	}
+	clusterNodes := getClusterNodesIP(kubeClient)
 
-	for _, nodo := range nodes.Items {
-		nodeIP, err := node.GetNodeHostIP(&nodo)
-		if err == nil {
-			clusterNodes = append(clusterNodes, nodeIP.String())
-		}
-	}
-	sort.Strings(clusterNodes)
-
-	ip, err := myIP(clusterNodes)
+	nodeInfo, err := getNodeInfo(clusterNodes)
 	if err != nil {
 		glog.Fatalf("Error getting local IP from nodes in the cluster: %v", err)
 	}
 
-	neighbors := []string{}
-	for _, neighbor := range clusterNodes {
-		if ip != neighbor {
-			neighbors = append(neighbors, neighbor)
-		}
-	}
-	sort.Strings(neighbors)
-
-	if iface == "" {
-		iface = interfaceByIP(ip)
-	}
+	neighbors := getNodeNeighbors(nodeInfo, clusterNodes)
 
 	ipvsc.keepalived = &keepalived{
-		iface:      iface,
-		ip:         ip,
-		netmask:    maskForIP(ip),
-		nodes:      clusterNodes,
-		neighbors:  neighbors,
-		priority:   getPriority(ip, clusterNodes),
-		runningCfg: []vip{},
+		iface:     nodeInfo.iface,
+		ip:        nodeInfo.ip,
+		netmask:   nodeInfo.netmask,
+		nodes:     clusterNodes,
+		neighbors: neighbors,
+		priority:  getNodePriority(nodeInfo.ip, clusterNodes),
 	}
 
 	enqueue := func(obj interface{}) {
@@ -253,10 +229,4 @@ func newIPVSController(kubeClient *unversioned.Client, namespace, iface string) 
 		&api.Endpoints{}, resyncPeriod, eventHandlers)
 
 	return &ipvsc
-}
-
-// getPriority returns the priority of one node using the
-// IP address as key. It starts in 100
-func getPriority(ip string, nodes []string) int {
-	return 100 + stringSlice(nodes).pos(ip)
 }

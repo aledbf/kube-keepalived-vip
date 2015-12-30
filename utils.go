@@ -3,9 +3,16 @@ package main
 import (
 	"errors"
 	"net"
+	"os"
 	"regexp"
+	"sort"
 
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client/unversioned"
+	k8sexec "k8s.io/kubernetes/pkg/util/exec"
+	"k8s.io/kubernetes/pkg/util/node"
+	"k8s.io/kubernetes/pkg/util/sysctl"
 )
 
 const (
@@ -16,6 +23,27 @@ var (
 	invalidIfaces = []string{"lo", "docker0", "flannel.1"}
 )
 
+type nodeInfo struct {
+	iface   string
+	ip      string
+	netmask int
+}
+
+// getNodeInfo returns information of the node where the pod is running
+func getNodeInfo(nodes []string) (*nodeInfo, error) {
+	ip, err := myIP(nodes)
+	if err != nil {
+		return &nodeInfo{}, err
+	}
+
+	return &nodeInfo{
+		iface:   interfaceByIP(ip),
+		ip:      ip,
+		netmask: maskForLocalIP(ip),
+	}, nil
+}
+
+// myIP returns
 func myIP(nodes []string) (string, error) {
 	var err error
 	for _, iface := range netInterfaces() {
@@ -29,6 +57,8 @@ func myIP(nodes []string) (string, error) {
 	return "0.0.0.0", err
 }
 
+// netInterfaces returns a slice containing the local network interfaces
+// excluding lo, docker0, flannel.1 and veth interfaces.
 func netInterfaces() []net.Interface {
 	r, _ := regexp.Compile(vethRegex)
 
@@ -47,6 +77,8 @@ func netInterfaces() []net.Interface {
 	return validIfaces
 }
 
+// interfaceByIP returns the local network interface name that is using the
+// specified IP address. If no interface is found returns an empty string.
 func interfaceByIP(ip string) string {
 	for _, iface := range netInterfaces() {
 		ifaceIP, _, err := ipByInterface(iface.Name)
@@ -58,7 +90,7 @@ func interfaceByIP(ip string) string {
 	return ""
 }
 
-func maskForIP(ip string) int {
+func maskForLocalIP(ip string) int {
 	for _, iface := range netInterfaces() {
 		ifaceIP, mask, err := ipByInterface(iface.Name)
 		if err == nil && ip == ifaceIP {
@@ -96,11 +128,76 @@ func ipByInterface(name string) (string, int, error) {
 
 type stringSlice []string
 
+// pos returns the position of a string in a slice.
+// If it does not exists in the slice returns -1.
 func (slice stringSlice) pos(value string) int {
 	for p, v := range slice {
 		if v == value {
 			return p
 		}
 	}
+
 	return -1
+}
+
+// getClusterNodesIP returns the IP address of each node in the kubernetes cluster
+func getClusterNodesIP(kubeClient *unversioned.Client) (clusterNodes []string) {
+	nodes, err := kubeClient.Nodes().List(api.ListOptions{})
+	if err != nil {
+		glog.Fatalf("Error getting running nodes: %v", err)
+	}
+
+	for _, nodo := range nodes.Items {
+		nodeIP, err := node.GetNodeHostIP(&nodo)
+		if err == nil {
+			clusterNodes = append(clusterNodes, nodeIP.String())
+		}
+	}
+	sort.Strings(clusterNodes)
+
+	return
+}
+
+// getNodeNeighbors returns a list of IP address of the nodes
+func getNodeNeighbors(nodeInfo *nodeInfo, clusterNodes []string) (neighbors []string) {
+	for _, neighbor := range clusterNodes {
+		if nodeInfo.ip != neighbor {
+			neighbors = append(neighbors, neighbor)
+		}
+	}
+	sort.Strings(neighbors)
+	return
+}
+
+// getPriority returns the priority of one node using the
+// IP address as key. It starts in 100
+func getNodePriority(ip string, nodes []string) int {
+	return 100 + stringSlice(nodes).pos(ip)
+}
+
+// loadIPVModule load module require to use keepalived
+func loadIPVModule() error {
+	out, err := k8sexec.New().Command("modprobe", "ip_vs").CombinedOutput()
+	if err != nil {
+		glog.V(2).Infof("Error loading ip_vip: %s, %v", string(out), err)
+		return err
+	}
+
+	_, err = os.Stat("/proc/net/ip_vs")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// changeSysctl changes the required settings for keepalived.
+func changeSysctl() error {
+	for k, v := range sysctlAdjustments {
+		if err := sysctl.SetSysctl(k, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
