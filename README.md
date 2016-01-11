@@ -1,3 +1,5 @@
+## Deprecated: this repo is now located inside [kubernetes/contrib](https://github.com/kubernetes/contrib/tree/master/keepalived-vip)
+
 # kube-keepalived-vip
 Kubernetes Virtual IP address/es using [keepalived](http://www.keepalived.org)
 
