@@ -1,130 +1,164 @@
+/*
+Copyright 2015 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"text/template"
 
 	"github.com/golang/glog"
-	k8sexec "k8s.io/kubernetes/pkg/util/exec"
+
+	"k8s.io/kubernetes/pkg/util/iptables"
+	k8sexec "k8s.io/utils/exec"
 )
 
 const (
-	keepalivedTmpl = `{{ $iface := .iface }}{{ $netmask := .netmask }}
-vrrp_sync_group VG_1 
-  group {
-    vips
-  }
-}
+	iptablesChain = "KUBE-KEEPALIVED-VIP"
+	keepalivedCfg = "/etc/keepalived/keepalived.conf"
+	haproxyCfg    = "/etc/haproxy/haproxy.cfg"
+)
 
-vrrp_instance vips {
-  state BACKUP
-  interface {{ $iface }}
-  virtual_router_id 50
-  priority {{ .priority }}
-  nopreempt
-  advert_int 1
-
-  track_interface {
-    {{ $iface }}
-  }
-
-  virtual_ipaddress { {{ range $i, $svc := .svcs }}
-    {{ $svc.Ip }}
-  {{ end }}}    
-
-  authentication {
-    auth_type AH
-    auth_pass {{ .authPass }}
-  }
-}
-
-{{ range $i, $svc := .svcs }}
-virtual_server {{ $svc.Ip }} {{ $svc.Port }} {
-  delay_loop 5
-  lvs_sched wlc
-  lvs_method NAT
-  persistence_timeout 1800
-  protocol TCP
-  #{{ $svc.Protocol }}
-  alpha
-
-  {{ range $j, $backend := $svc.Backends }}
-  real_server {{ $backend.Ip }} {{ $backend.Port }} {
-    weight 1
-    TCP_CHECK {
-      connect_port {{ $backend.Port }}
-      connect_timeout 3
-    }
-  }
-{{ end }}
-}    
-{{ end }}
-`
+var (
+	keepalivedTmpl = "keepalived.tmpl"
+	haproxyTmpl    = "haproxy.tmpl"
 )
 
 type keepalived struct {
-	iface     string
-	ip        string
-	netmask   int
-	priority  int
-	nodes     []string
-	neighbors []string
+	iface          string
+	ip             string
+	netmask        int
+	priority       int
+	nodes          []string
+	neighbors      []string
+	useUnicast     bool
+	started        bool
+	vips           []string
+	keepalivedTmpl *template.Template
+	haproxyTmpl    *template.Template
+	cmd            *exec.Cmd
+	ipt            iptables.Interface
+	vrid           int
+	proxyMode      bool
 }
 
+// WriteCfg creates a new keepalived configuration file.
+// In case of an error with the generation it returns the error
 func (k *keepalived) WriteCfg(svcs []vip) error {
-	w, err := os.Create("/etc/keepalived/keepalived.conf")
+	w, err := os.Create(keepalivedCfg)
 	if err != nil {
 		return err
 	}
 	defer w.Close()
 
-	t, err := template.New("keepalived").Parse(keepalivedTmpl)
-	if err != nil {
-		return err
-	}
+	k.vips = getVIPs(svcs)
 
 	conf := make(map[string]interface{})
+	conf["iptablesChain"] = iptablesChain
 	conf["iface"] = k.iface
 	conf["myIP"] = k.ip
 	conf["netmask"] = k.netmask
 	conf["svcs"] = svcs
+	conf["vips"] = getVIPs(svcs)
 	conf["nodes"] = k.neighbors
 	conf["priority"] = k.priority
-	conf["authPass"] = k.getSha()
+	conf["useUnicast"] = k.useUnicast
+	conf["vrid"] = k.vrid
+	conf["proxyMode"] = k.proxyMode
 
-	b, _ := json.Marshal(conf)
-	glog.Infof("%v", string(b))
+	if glog.V(2) {
+		b, _ := json.Marshal(conf)
+		glog.Infof("%v", string(b))
+	}
 
-	return t.Execute(w, conf)
+	err = k.keepalivedTmpl.Execute(w, conf)
+	if err != nil {
+		return fmt.Errorf("unexpected error creating keepalived.cfg: %v", err)
+	}
+
+	if k.proxyMode {
+		w, err := os.Create(haproxyCfg)
+		if err != nil {
+			return err
+		}
+		defer w.Close()
+		err = k.haproxyTmpl.Execute(w, conf)
+		if err != nil {
+			return fmt.Errorf("unexpected error creating haproxy.cfg: %v", err)
+		}
+	}
+
+	return nil
 }
 
+// getVIPs returns a list of the virtual IP addresses to be used in keepalived
+// without duplicates (a service can use more than one port)
+func getVIPs(svcs []vip) []string {
+	result := []string{}
+	for _, svc := range svcs {
+		result = appendIfMissing(result, svc.IP)
+	}
+
+	return result
+}
+
+// Start starts a keepalived process in foreground.
+// In case of any error it will terminate the execution with a fatal error
 func (k *keepalived) Start() {
-	cmd := exec.Command("keepalived",
+	ae, err := k.ipt.EnsureChain(iptables.TableFilter, iptables.Chain(iptablesChain))
+	if err != nil {
+		glog.Fatalf("unexpected error: %v", err)
+	}
+	if ae {
+		glog.V(2).Infof("chain %v already existed", iptablesChain)
+	}
+
+	k.cmd = exec.Command("keepalived",
 		"--dont-fork",
 		"--log-console",
-		"-D",
+		"--release-vips",
 		"--pid", "/keepalived.pid")
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	k.cmd.Stdout = os.Stdout
+	k.cmd.Stderr = os.Stderr
 
-	if err := cmd.Start(); err != nil {
+	k.started = true
+
+	if err := k.cmd.Start(); err != nil {
 		glog.Errorf("keepalived error: %v", err)
 	}
 
-	if err := cmd.Wait(); err != nil {
+	if err := k.cmd.Wait(); err != nil {
 		glog.Fatalf("keepalived error: %v", err)
 	}
 }
 
+// Reload sends SIGHUP to keepalived to reload the configuration.
 func (k *keepalived) Reload() error {
+	if !k.started {
+		// TODO: add a warning indicating that keepalived is not started?
+		return nil
+	}
+
 	glog.Info("reloading keepalived")
-	_, err := k8sexec.New().Command("killall", "-1", "keepalived").CombinedOutput()
+	err := syscall.Kill(k.cmd.Process.Pid, syscall.SIGHUP)
 	if err != nil {
 		return fmt.Errorf("error reloading keepalived: %v", err)
 	}
@@ -132,9 +166,54 @@ func (k *keepalived) Reload() error {
 	return nil
 }
 
-// getSha returns a sha1 of the list of nodes in the cluster
-func (k *keepalived) getSha() string {
-	h := sha1.New()
-	h.Write([]byte(fmt.Sprintf("%v", k.nodes)))
-	return hex.EncodeToString(h.Sum(nil))
+// Stop stop keepalived process
+func (k *keepalived) Stop() {
+	for _, vip := range k.vips {
+		k.removeVIP(vip)
+	}
+
+	err := k.ipt.FlushChain(iptables.TableFilter, iptables.Chain(iptablesChain))
+	if err != nil {
+		glog.V(2).Infof("unexpected error flushing iptables chain %v: %v", err, iptablesChain)
+	}
+
+	err = syscall.Kill(k.cmd.Process.Pid, syscall.SIGTERM)
+	if err != nil {
+		glog.Errorf("error stopping keepalived: %v", err)
+	}
+}
+
+func resetIPVS() error {
+	glog.Info("cleaning ipvs configuration")
+	_, err := k8sexec.New().Command("ipvsadm", "-C").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error removing ipvs configuration: %v", err)
+	}
+
+	return nil
+}
+
+func (k *keepalived) removeVIP(vip string) error {
+	glog.Infof("removing configured VIP %v", vip)
+	out, err := k8sexec.New().Command("ip", "addr", "del", vip+"/32", "dev", k.iface).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error reloading keepalived: %v\n%s", err, out)
+	}
+	return nil
+}
+
+func (k *keepalived) loadTemplates() error {
+	tmpl, err := template.ParseFiles(keepalivedTmpl)
+	if err != nil {
+		return err
+	}
+	k.keepalivedTmpl = tmpl
+
+	tmpl, err = template.ParseFiles(haproxyTmpl)
+	if err != nil {
+		return err
+	}
+	k.haproxyTmpl = tmpl
+
+	return nil
 }
