@@ -1,4 +1,7 @@
-## 0.15
+## 0.16
+- Update keepalived to 1.3.6
+- Update go dependencies
+- Migrate to client-go
 
 ## 0.10
 - Add proxy mode

@@ -1,6 +1,6 @@
 all: push
 
-# 0.0 shouldn't clobber any release builds, current "latest" is 0.9
+# 0.0 shouldn't clobber any release builds, current "latest" is 0.16
 TAG = 0.16
 PREFIX = aledbf/kube-keepalived-vip
 BUILD_IMAGE = build-keepalived
@@ -19,7 +19,7 @@ keepalived:
 	docker rm -f $(BUILD_IMAGE)
 
 push: container
-	gcloud docker -- push $(PREFIX):$(TAG)
+	docker -- push $(PREFIX):$(TAG)
 
 clean:
 	rm -f kube-keepalived-vip
