@@ -109,6 +109,10 @@ func main() {
 		glog.Fatalf("unexpected error: %v", err)
 	}
 
+	if *vrid < 0 || *vrid > 255 {
+		glog.Fatalf("Error using VRID %d, only values between 0 and 255 are allowed.", vrid)
+	}
+
 	err = resetIPVS()
 	if err != nil {
 		glog.Fatalf("unexpected error: %v", err)
