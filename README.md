@@ -29,8 +29,9 @@ This should be considered a complement, not a replacement for HAProxy or nginx. 
 
 ## Configuration
 
-To expose one or more services use the flag `services-configmap`. The format of the data is: `external IP -> namespace/serviceName`. Optionally is possible to specify forwarding method using `:` after the service name. The valid options are `NAT` and `DR`. For instance `external IP -> namespace/serviceName:DR`.
-By default if the method is not specified it will use NAT.
+To expose one or more services use the flag `services-configmap`. The format of the data is: `external IP -> namespace/serviceName`. Optionally is possible to specify forwarding method using `:` after the service name. The valid options are `NAT`, `DR` and `PROXY`. 
+For instance `external IP -> namespace/serviceName:DR`.
+If the method is not specified it will use NAT.
 
 This IP must be routable inside the LAN and must be available. 
 By default the IP address of the pods are used to route the traffic. This means that is one pod dies or a new one is created by a scale event the keepalived configuration file will be updated and reloaded.
@@ -66,7 +67,7 @@ $ kubectl create -f vip-daemonset.yaml
 daemonset "kube-keepalived-vip" created
 $ kubectl get daemonset
 NAME                  CONTAINER(S)          IMAGE(S)                         SELECTOR                        NODE-SELECTOR
-kube-keepalived-vip   kube-keepalived-vip   gcr.io/google_containers/kube-keepalived-vip:0.10   name in (kube-keepalived-vip)   type=worker
+kube-keepalived-vip   kube-keepalived-vip   aledbf/kube-keepalived-vip:0.15   name in (kube-keepalived-vip)   type=worker
 ```
 
 **Note: the daemonset yaml file contains a node selector. This is not required, is just an example to show how is possible to limit the nodes where keepalived can run**
