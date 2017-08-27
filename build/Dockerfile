@@ -12,23 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM alpine:3.2
+FROM gcr.io/google_containers/ubuntu-slim:0.14
 
-RUN apk add -U alpine-sdk
+COPY build.sh /build.sh
 
-RUN mkdir -p /var/cache/distfiles && \
-  adduser -D packager && \
-    addgroup packager abuild && \
-    chgrp abuild /var/cache/distfiles && \
-    chmod g+w /var/cache/distfiles && \
-    echo "packager    ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+ENV VERSION 1.3.6
+ENV SHA256 2dc11caf653180152744449a3a096a413d852e9df5503ede2c1bb9b1d76d169f
 
-USER packager
-
-WORKDIR /work
-
-RUN abuild-keygen -a -i
-ADD src /work
-RUN sudo chown -R packager /work
-
-RUN abuild -c -r -P /work
+RUN /build.sh
