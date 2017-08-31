@@ -1,4 +1,11 @@
+## 0.17
+- Cleanup
+- Configmap update detection
+
 ## 0.16
+- Fix DR mode issue
+
+## 0.15
 - Update keepalived to 1.3.6
 - Update go dependencies
 - Migrate to client-go

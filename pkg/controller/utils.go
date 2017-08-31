@@ -14,31 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package controller
 
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/golang/glog"
 
 	apiv1 "k8s.io/api/core/v1"
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
-	"k8s.io/kubernetes/pkg/util/sysctl"
-	k8sexec "k8s.io/utils/exec"
 )
 
 var (
@@ -55,28 +46,6 @@ type nodeInfo struct {
 	netmask int
 }
 
-// StoreToEndpointsLister makes a Store that lists Endpoints.
-type StoreToEndpointsLister struct {
-	cache.Store
-}
-
-// GetServiceEndpoints returns the endpoints of a service, matched on service name.
-func (s *StoreToEndpointsLister) GetServiceEndpoints(svc *apiv1.Service) (ep apiv1.Endpoints, err error) {
-	for _, m := range s.Store.List() {
-		ep = *m.(*apiv1.Endpoints)
-		if svc.Name == ep.Name && svc.Namespace == ep.Namespace {
-			return ep, nil
-		}
-	}
-	err = fmt.Errorf("could not find endpoints for service: %v", svc.Name)
-	return
-}
-
-// StoreToServiceLister makes a Store that lists Service.
-type StoreToServiceLister struct {
-	cache.Indexer
-}
-
 // getNetworkInfo returns information of the node where the pod is running
 func getNetworkInfo(ip string) (*nodeInfo, error) {
 	iface, _, mask := interfaceByIP(ip)
@@ -84,48 +53,6 @@ func getNetworkInfo(ip string) (*nodeInfo, error) {
 		iface:   iface,
 		ip:      ip,
 		netmask: mask,
-	}, nil
-}
-
-type podInfo struct {
-	PodName      string
-	PodNamespace string
-	NodeIP       string
-}
-
-// getPodDetails  returns runtime information about the pod: name, namespace and IP of the node
-func getPodDetails(kubeClient *kubernetes.Clientset) (*podInfo, error) {
-	podName := os.Getenv("POD_NAME")
-	podNs := os.Getenv("POD_NAMESPACE")
-
-	if podName == "" || podNs == "" {
-		return nil, fmt.Errorf("Please check the manifest (for missing POD_NAME or POD_NAMESPACE env variables)")
-	}
-
-	err := waitForPodRunning(kubeClient, podNs, podName, time.Millisecond*200, time.Second*30)
-	if err != nil {
-		return nil, err
-	}
-
-	pod, _ := kubeClient.Pods(podNs).Get(podName, metav1.GetOptions{})
-	if pod == nil {
-		return nil, fmt.Errorf("Unable to get POD information")
-	}
-
-	n, err := kubeClient.Nodes().Get(pod.Spec.NodeName, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	externalIP, err := getNodeHostIP(n)
-	if err != nil {
-		return nil, err
-	}
-
-	return &podInfo{
-		PodName:      podName,
-		PodNamespace: podNs,
-		NodeIP:       externalIP.String(),
 	}, nil
 }
 
@@ -249,31 +176,6 @@ func getNodePriority(ip string, nodes []string) int {
 	return 100 + stringSlice(nodes).pos(ip)
 }
 
-// loadIPVModule load module require to use keepalived
-func loadIPVModule() error {
-	out, err := k8sexec.New().Command("modprobe", "ip_vs").CombinedOutput()
-	if err != nil {
-		glog.V(2).Infof("Error loading ip_vip: %s, %v", string(out), err)
-		return err
-	}
-
-	_, err = os.Stat("/proc/net/ip_vs")
-	return err
-}
-
-// changeSysctl changes the required network setting in /proc to get
-// keepalived working in the local system.
-func changeSysctl() error {
-	sys := sysctl.New()
-	for k, v := range sysctlAdjustments {
-		if err := sys.SetSysctl(k, v); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func appendIfMissing(slice []string, item string) []string {
 	for _, elem := range slice {
 		if elem == item {
@@ -334,124 +236,6 @@ func (ns nodeSelector) String() string {
 
 func parseNodeSelector(data map[string]string) string {
 	return nodeSelector(data).String()
-}
-
-func waitForPodRunning(kubeClient *kubernetes.Clientset, ns, podName string, interval, timeout time.Duration) error {
-	condition := func(pod *apiv1.Pod) (bool, error) {
-		if pod.Status.Phase == apiv1.PodRunning {
-			return true, nil
-		}
-		return false, nil
-	}
-
-	return waitForPodCondition(kubeClient, ns, podName, condition, interval, timeout)
-}
-
-// waitForPodCondition waits for a pod in state defined by a condition (func)
-func waitForPodCondition(kubeClient *kubernetes.Clientset, ns, podName string, condition func(pod *apiv1.Pod) (bool, error),
-	interval, timeout time.Duration) error {
-	err := wait.PollImmediate(interval, timeout, func() (bool, error) {
-		pod, err := kubeClient.Pods(ns).Get(podName, metav1.GetOptions{})
-		if err != nil {
-			if apierrs.IsNotFound(err) {
-				return false, nil
-			}
-		}
-
-		done, err := condition(pod)
-		if err != nil {
-			return false, err
-		}
-		if done {
-			return true, nil
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("timed out waiting to observe own status as Running")
-	}
-
-	return nil
-}
-
-// taskQueue manages a work queue through an independent worker that
-// invokes the given sync function for every work item inserted.
-type taskQueue struct {
-	// queue is the work queue the worker polls
-	queue workqueue.RateLimitingInterface
-	// sync is called for each item in the queue
-	sync func(string) error
-	// workerDone is closed when the worker exits
-	workerDone chan struct{}
-}
-
-func (t *taskQueue) run(period time.Duration, stopCh <-chan struct{}) {
-	wait.Until(t.worker, period, stopCh)
-}
-
-// enqueue enqueues ns/name of the given api object in the task queue.
-func (t *taskQueue) enqueue(obj interface{}) {
-	key, err := keyFunc(obj)
-	if err != nil {
-		glog.Infof("could not get key for object %+v: %v", obj, err)
-		return
-	}
-	t.queue.Add(key)
-}
-
-func (t *taskQueue) requeue(key string) {
-	t.queue.AddRateLimited(key)
-}
-
-// worker processes work in the queue through sync.
-func (t *taskQueue) worker() {
-	for {
-		key, quit := t.queue.Get()
-		if quit {
-			close(t.workerDone)
-			return
-		}
-		glog.V(3).Infof("syncing %v", key)
-		if err := t.sync(key.(string)); err != nil {
-			glog.V(3).Infof("requeuing %v, err %v", key, err)
-			t.requeue(key.(string))
-		} else {
-			t.queue.Forget(key)
-		}
-
-		t.queue.Done(key)
-	}
-}
-
-// shutdown shuts down the work queue and waits for the worker to ACK
-func (t *taskQueue) shutdown() {
-	t.queue.ShutDown()
-	<-t.workerDone
-}
-
-// NewTaskQueue creates a new task queue with the given sync function.
-// The sync function is called for every element inserted into the queue.
-func NewTaskQueue(syncFn func(string) error) *taskQueue {
-	return &taskQueue{
-		queue:      workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
-		sync:       syncFn,
-		workerDone: make(chan struct{}),
-	}
-}
-
-// copyHaproxyCfg copies the default haproxy configuration file
-// to the mounted directory (the mount overwrites the default file)
-func copyHaproxyCfg() {
-	data, err := ioutil.ReadFile("/haproxy.cfg")
-	if err != nil {
-		glog.Fatalf("unexpected error reading haproxy.cfg: %v", err)
-	}
-	err = ioutil.WriteFile("/etc/haproxy/haproxy.cfg", data, 0644)
-	if err != nil {
-		glog.Fatalf("unexpected error writing haproxy.cfg: %v", err)
-	}
 }
 
 // GetNodeHostIP returns the provided node's IP, based on the priority:

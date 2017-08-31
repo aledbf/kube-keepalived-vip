@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gcr.io/google_containers/ubuntu-slim:0.11
+FROM gcr.io/google_containers/ubuntu-slim:0.14
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   libssl1.0.0 \
@@ -40,11 +40,6 @@ RUN mkdir -p /etc/keepalived && \
   ln -s /keepalived/sbin/keepalived /usr/sbin && \
   ln -s /keepalived/bin/genhash /usr/sbin
 
-COPY kube-keepalived-vip /
-COPY keepalived.tmpl /
-COPY keepalived.conf /etc/keepalived
-COPY haproxy.tmpl /haproxy.tmpl
-COPY haproxy-check.sh /haproxy-check.sh
-COPY haproxy.cfg /
+COPY . /
 
 ENTRYPOINT ["/kube-keepalived-vip"]
