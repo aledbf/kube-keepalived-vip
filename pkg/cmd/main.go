@@ -18,24 +18,26 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 
 	apiv1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/kubernetes/pkg/util/sysctl"
+	k8sexec "k8s.io/utils/exec"
+
+	"github.com/aledbf/kube-keepalived-vip/pkg/controller"
 )
 
 var (
-	flags = pflag.NewFlagSet("", pflag.ContinueOnError)
+	flags = pflag.NewFlagSet("", pflag.ExitOnError)
 
 	apiserverHost = flags.String("apiserver-host", "", "The address of the Kubernetes Apiserver "+
 		"to connect to in the format of protocol://address:port, e.g., "+
@@ -94,12 +96,11 @@ func main() {
 		glog.Info("keepalived will use unicast to sync the nodes")
 	}
 
-	kubeClient, err := createApiserverClient(*apiserverHost, *kubeConfigFile)
-	if err != nil {
-		handleFatalInitError(err)
+	if *vrid < 0 || *vrid > 255 {
+		glog.Fatalf("Error using VRID %d, only values between 0 and 255 are allowed.", vrid)
 	}
 
-	err = loadIPVModule()
+	err := loadIPVModule()
 	if err != nil {
 		glog.Fatalf("unexpected error: %v", err)
 	}
@@ -107,10 +108,6 @@ func main() {
 	err = changeSysctl()
 	if err != nil {
 		glog.Fatalf("unexpected error: %v", err)
-	}
-
-	if *vrid < 0 || *vrid > 255 {
-		glog.Fatalf("Error using VRID %d, only values between 0 and 255 are allowed.", vrid)
 	}
 
 	err = resetIPVS()
@@ -122,34 +119,15 @@ func main() {
 		copyHaproxyCfg()
 	}
 
-	glog.Info("starting LVS configuration")
-	ipvsc := newIPVSController(kubeClient, *watchNamespace, *useUnicast, *configMapName, *vrid, *proxyMode)
-
-	go ipvsc.epController.Run(wait.NeverStop)
-	go ipvsc.svcController.Run(wait.NeverStop)
-
-	go ipvsc.syncQueue.run(time.Second, ipvsc.stopCh)
-
-	go handleSigterm(ipvsc)
-
-	glog.Info("starting keepalived to announce VIPs")
-	ipvsc.keepalived.Start()
-}
-
-func handleSigterm(ipvsc *ipvsControllerController) {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGTERM)
-	<-signalChan
-	glog.Infof("Received SIGTERM, shutting down")
-
-	exitCode := 0
-	if err := ipvsc.Stop(); err != nil {
-		glog.Infof("Error during shutdown %v", err)
-		exitCode = 1
+	kubeClient, err := createApiserverClient(*apiserverHost, *kubeConfigFile)
+	if err != nil {
+		handleFatalInitError(err)
 	}
 
-	glog.Infof("Exiting with %v", exitCode)
-	os.Exit(exitCode)
+	glog.Info("starting LVS configuration")
+	ipvsc := controller.NewIPVSController(kubeClient, *watchNamespace, *useUnicast, *configMapName, *vrid, *proxyMode)
+
+	ipvsc.Start()
 }
 
 const (
@@ -216,4 +194,52 @@ func handleFatalInitError(err error) {
 	glog.Fatalf("Error while initializing connection to Kubernetes apiserver. "+
 		"This most likely means that the cluster is misconfigured (e.g., it has "+
 		"invalid apiserver certificates or service accounts configuration). Reason: %s\n", err)
+}
+
+// loadIPVModule load module require to use keepalived
+func loadIPVModule() error {
+	out, err := k8sexec.New().Command("modprobe", "ip_vs").CombinedOutput()
+	if err != nil {
+		glog.V(2).Infof("Error loading ip_vip: %s, %v", string(out), err)
+		return err
+	}
+
+	_, err = os.Stat("/proc/net/ip_vs")
+	return err
+}
+
+// changeSysctl changes the required network setting in /proc to get
+// keepalived working in the local system.
+func changeSysctl() error {
+	sys := sysctl.New()
+	for k, v := range sysctlAdjustments {
+		if err := sys.SetSysctl(k, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func resetIPVS() error {
+	glog.Info("cleaning ipvs configuration")
+	_, err := k8sexec.New().Command("ipvsadm", "-C").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error removing ipvs configuration: %v", err)
+	}
+
+	return nil
+}
+
+// copyHaproxyCfg copies the default haproxy configuration file
+// to the mounted directory (the mount overwrites the default file)
+func copyHaproxyCfg() {
+	data, err := ioutil.ReadFile("/haproxy.cfg")
+	if err != nil {
+		glog.Fatalf("unexpected error reading haproxy.cfg: %v", err)
+	}
+	err = ioutil.WriteFile("/etc/haproxy/haproxy.cfg", data, 0644)
+	if err != nil {
+		glog.Fatalf("unexpected error writing haproxy.cfg: %v", err)
+	}
 }

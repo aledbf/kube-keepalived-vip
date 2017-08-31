@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package controller
 
 import (
 	"crypto/md5"
@@ -22,20 +22,28 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"reflect"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/golang/glog"
+
+	"github.com/aledbf/kube-keepalived-vip/pkg/k8s"
+	"github.com/aledbf/kube-keepalived-vip/pkg/store"
+	"github.com/aledbf/kube-keepalived-vip/pkg/task"
 
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/flowcontrol"
+
 	utildbus "k8s.io/kubernetes/pkg/util/dbus"
 	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
@@ -104,25 +112,34 @@ func (c vipByNameIPPort) Less(i, j int) bool {
 // ipvsControllerController watches the kubernetes api and adds/removes
 // services from LVS throgh ipvsadmin.
 type ipvsControllerController struct {
-	client            *kubernetes.Clientset
-	epController      cache.Controller
-	svcController     cache.Controller
-	svcLister         StoreToServiceLister
-	epLister          StoreToEndpointsLister
+	client *kubernetes.Clientset
+
+	epController  cache.Controller
+	mapController cache.Controller
+	svcController cache.Controller
+
+	svcLister store.ServiceLister
+	epLister  store.EndpointLister
+	mapLister store.ConfigMapLister
+
 	reloadRateLimiter flowcontrol.RateLimiter
-	keepalived        *keepalived
-	configMapName     string
-	ruCfg             []vip
-	ruMD5             string
+
+	keepalived *keepalived
+
+	configMapName string
+
+	ruMD5 string
 
 	// stopLock is used to enforce only a single call to Stop is active.
 	// Needed because we allow stopping through an http endpoint and
 	// allowing concurrent stoppers leads to stack traces.
 	stopLock sync.Mutex
 
-	shutdown  bool
-	syncQueue *taskQueue
-	stopCh    chan struct{}
+	shutdown bool
+
+	syncQueue *task.Queue
+
+	stopCh chan struct{}
 }
 
 // getEndpoints returns a list of <endpoint ip>:<port> for a given service/target port combination.
@@ -178,7 +195,7 @@ func (ipvsc *ipvsControllerController) getServices(cfgMap *apiv1.ConfigMap) []vi
 		}
 
 		nsSvc := fmt.Sprintf("%v/%v", ns, svc)
-		svcObj, svcExists, err := ipvsc.svcLister.Indexer.GetByKey(nsSvc)
+		svcObj, svcExists, err := ipvsc.svcLister.Store.GetByKey(nsSvc)
 		if err != nil {
 			glog.Warningf("error getting service %v: %v", nsSvc, err)
 			continue
@@ -216,18 +233,9 @@ func (ipvsc *ipvsControllerController) getServices(cfgMap *apiv1.ConfigMap) []vi
 	return svcs
 }
 
-func (ipvsc *ipvsControllerController) getConfigMap(ns, name string) (*apiv1.ConfigMap, error) {
-	return ipvsc.client.CoreV1().ConfigMaps(ns).Get(name, metav1.GetOptions{})
-}
-
 // sync all services with the
-func (ipvsc *ipvsControllerController) sync(key string) error {
+func (ipvsc *ipvsControllerController) sync(key interface{}) error {
 	ipvsc.reloadRateLimiter.Accept()
-
-	if !ipvsc.epController.HasSynced() || !ipvsc.svcController.HasSynced() {
-		time.Sleep(100 * time.Millisecond)
-		return fmt.Errorf("deferring sync till endpoints controller has synced")
-	}
 
 	ns, name, err := parseNsName(ipvsc.configMapName)
 	if err != nil {
@@ -240,12 +248,12 @@ func (ipvsc *ipvsControllerController) sync(key string) error {
 	}
 
 	svc := ipvsc.getServices(cfgMap)
-	ipvsc.ruCfg = svc
 
 	err = ipvsc.keepalived.WriteCfg(svc)
 	if err != nil {
 		return err
 	}
+
 	glog.V(2).Infof("services: %v", svc)
 
 	md5, err := checksum(keepalivedCfg)
@@ -263,17 +271,53 @@ func (ipvsc *ipvsControllerController) sync(key string) error {
 }
 
 // Stop stops the loadbalancer controller.
+func (ipvsc *ipvsControllerController) Start() {
+	go ipvsc.epController.Run(ipvsc.stopCh)
+	go ipvsc.svcController.Run(ipvsc.stopCh)
+	go ipvsc.mapController.Run(ipvsc.stopCh)
+
+	go ipvsc.syncQueue.Run(time.Second, ipvsc.stopCh)
+
+	go handleSigterm(ipvsc)
+
+	// Wait for all involved caches to be synced, before processing items from the queue is started
+	if !cache.WaitForCacheSync(ipvsc.stopCh,
+		ipvsc.epController.HasSynced,
+		ipvsc.svcController.HasSynced,
+		ipvsc.mapController.HasSynced,
+	) {
+		runtime.HandleError(fmt.Errorf("timed out waiting for caches to sync"))
+	}
+
+	glog.Info("starting keepalived to announce VIPs")
+	ipvsc.keepalived.Start()
+}
+
+func handleSigterm(ipvsc *ipvsControllerController) {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM)
+	<-signalChan
+	glog.Infof("Received SIGTERM, shutting down")
+
+	exitCode := 0
+	if err := ipvsc.Stop(); err != nil {
+		glog.Infof("Error during shutdown %v", err)
+		exitCode = 1
+	}
+
+	glog.Infof("Exiting with %v", exitCode)
+	os.Exit(exitCode)
+}
+
+// Stop stops the loadbalancer controller.
 func (ipvsc *ipvsControllerController) Stop() error {
 	ipvsc.stopLock.Lock()
 	defer ipvsc.stopLock.Unlock()
 
-	// Only try draining the workqueue if we haven't already.
-	if !ipvsc.shutdown {
-		ipvsc.shutdown = true
+	if !ipvsc.syncQueue.IsShuttingDown() {
+		glog.Infof("shutting down controller queues")
 		close(ipvsc.stopCh)
-
-		glog.Infof("Shutting down controller queue")
-		ipvsc.syncQueue.shutdown()
+		go ipvsc.syncQueue.Shutdown()
 
 		ipvsc.keepalived.Stop()
 
@@ -283,24 +327,23 @@ func (ipvsc *ipvsControllerController) Stop() error {
 	return fmt.Errorf("shutdown already in progress")
 }
 
-// newIPVSController creates a new controller from the given config.
-func newIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUnicast bool, configMapName string, vrid int, proxyMode bool) *ipvsControllerController {
+// NewIPVSController creates a new controller from the given config.
+func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUnicast bool, configMapName string, vrid int, proxyMode bool) *ipvsControllerController {
 	ipvsc := ipvsControllerController{
 		client:            kubeClient,
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.5, 1),
-		ruCfg:             []vip{},
 		configMapName:     configMapName,
 		stopCh:            make(chan struct{}),
 	}
 
-	podInfo, err := getPodDetails(kubeClient)
+	podInfo, err := k8s.GetPodDetails(kubeClient)
 	if err != nil {
 		glog.Fatalf("Error getting POD information: %v", err)
 	}
 
-	pod, err := kubeClient.Pods(podInfo.PodNamespace).Get(podInfo.PodName, metav1.GetOptions{})
+	pod, err := kubeClient.Pods(podInfo.Namespace).Get(podInfo.Name, metav1.GetOptions{})
 	if err != nil {
-		glog.Fatalf("Error getting %v: %v", podInfo.PodName, err)
+		glog.Fatalf("Error getting %v: %v", podInfo.Name, err)
 	}
 
 	selector := parseNodeSelector(pod.Spec.NodeSelector)
@@ -330,40 +373,64 @@ func newIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 		proxyMode:  proxyMode,
 	}
 
-	ipvsc.syncQueue = NewTaskQueue(ipvsc.sync)
+	ipvsc.syncQueue = task.NewTaskQueue(ipvsc.sync)
 
 	err = ipvsc.keepalived.loadTemplates()
 	if err != nil {
 		glog.Fatalf("Error loading templates: %v", err)
 	}
 
-	eventHandlers := cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			ipvsc.syncQueue.enqueue(obj)
-		},
-		DeleteFunc: func(obj interface{}) {
-			ipvsc.syncQueue.enqueue(obj)
-		},
+	mapEventHandler := cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(old, cur interface{}) {
 			if !reflect.DeepEqual(old, cur) {
-				ipvsc.syncQueue.enqueue(cur)
+				upCmap := cur.(*apiv1.ConfigMap)
+				mapKey := fmt.Sprintf("%s/%s", upCmap.Namespace, upCmap.Name)
+				// updates to configuration configmaps can trigger an update
+				if mapKey == ipvsc.configMapName {
+					ipvsc.syncQueue.Enqueue(cur)
+				}
 			}
 		},
 	}
 
-	ipvsc.svcLister.Indexer, ipvsc.svcController = cache.NewIndexerInformer(
-		cache.NewListWatchFromClient(ipvsc.client.Core().RESTClient(), "services", namespace, fields.Everything()),
-		&apiv1.Service{},
-		resyncPeriod,
-		eventHandlers,
-		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-	)
+	eventHandlers := cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			ipvsc.syncQueue.Enqueue(obj)
+		},
+		DeleteFunc: func(obj interface{}) {
+			ipvsc.syncQueue.Enqueue(obj)
+		},
+		UpdateFunc: func(old, cur interface{}) {
+			if !reflect.DeepEqual(old, cur) {
+				ipvsc.syncQueue.Enqueue(cur)
+			}
+		},
+	}
+
+	ipvsc.svcLister.Store, ipvsc.svcController = cache.NewInformer(
+		cache.NewListWatchFromClient(ipvsc.client.CoreV1().RESTClient(), "services", namespace, fields.Everything()),
+		&apiv1.Service{}, resyncPeriod, cache.ResourceEventHandlerFuncs{})
 
 	ipvsc.epLister.Store, ipvsc.epController = cache.NewInformer(
-		cache.NewListWatchFromClient(ipvsc.client.Core().RESTClient(), "endpoints", namespace, fields.Everything()),
+		cache.NewListWatchFromClient(ipvsc.client.CoreV1().RESTClient(), "endpoints", namespace, fields.Everything()),
 		&apiv1.Endpoints{}, resyncPeriod, eventHandlers)
 
+	ipvsc.mapLister.Store, ipvsc.mapController = cache.NewInformer(
+		cache.NewListWatchFromClient(ipvsc.client.CoreV1().RESTClient(), "configmaps", namespace, fields.Everything()),
+		&apiv1.ConfigMap{}, resyncPeriod, mapEventHandler)
+
 	return &ipvsc
+}
+
+func (ipvsc *ipvsControllerController) getConfigMap(ns, name string) (*apiv1.ConfigMap, error) {
+	s, exists, err := ipvsc.mapLister.Store.GetByKey(fmt.Sprintf("%v/%v", ns, name))
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("configmap %v was not found", name)
+	}
+	return s.(*apiv1.ConfigMap), nil
 }
 
 func checksum(filename string) (string, error) {

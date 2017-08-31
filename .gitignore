@@ -1,1 +1,2 @@
-kube-keepalived-vip
+rootfs/kube-keepalived-vip
+rootfs/keepalived.tar.gz

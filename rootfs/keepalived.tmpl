@@ -5,10 +5,12 @@ global_defs {
   vrrp_iptables {{ .iptablesChain }}
 }
 
+{{ if .proxyMode }}
 vrrp_script chk_haproxy {
   script "/haproxy-check.sh"
   interval 1
 }
+{{ end }}
 
 vrrp_instance vips {
   state BACKUP
@@ -33,7 +35,7 @@ vrrp_instance vips {
     {{ . }}{{ end }}
   }
 
-{{ if .proxyMode}}
+{{ if .proxyMode }}
   # In proxy mode there is no need to create virtual servers
   track_script {
     chk_haproxy weight 1

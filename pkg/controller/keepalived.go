@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package controller
 
 import (
 	"encoding/json"
@@ -181,16 +181,6 @@ func (k *keepalived) Stop() {
 	if err != nil {
 		glog.Errorf("error stopping keepalived: %v", err)
 	}
-}
-
-func resetIPVS() error {
-	glog.Info("cleaning ipvs configuration")
-	_, err := k8sexec.New().Command("ipvsadm", "-C").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("error removing ipvs configuration: %v", err)
-	}
-
-	return nil
 }
 
 func (k *keepalived) removeVIP(vip string) error {
