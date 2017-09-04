@@ -74,7 +74,7 @@ func netInterfaces() []net.Interface {
 		}
 	}
 
-	glog.Infof("network interfaces: %+v", validIfaces)
+	glog.V(2).Infof("network interfaces: %+v", validIfaces)
 	return validIfaces
 }
 
