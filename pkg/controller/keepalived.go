@@ -139,6 +139,11 @@ func (k *keepalived) Start() {
 	k.cmd.Stdout = os.Stdout
 	k.cmd.Stderr = os.Stderr
 
+	k.cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+		Pgid:    0,
+	}
+
 	k.started = true
 
 	if err := k.cmd.Start(); err != nil {
