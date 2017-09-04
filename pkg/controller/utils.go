@@ -26,10 +26,11 @@ import (
 
 	"github.com/golang/glog"
 
-	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/aledbf/kube-keepalived-vip/pkg/k8s"
 )
 
 var (
@@ -149,10 +150,8 @@ func getClusterNodesIP(kubeClient *kubernetes.Clientset, nodeSelector string) (c
 	}
 
 	for _, nodo := range nodes.Items {
-		nodeIP, err := getNodeHostIP(&nodo)
-		if err == nil {
-			clusterNodes = append(clusterNodes, nodeIP.String())
-		}
+		nodeIP := k8s.GetNodeIP(kubeClient, nodo.Name)
+		clusterNodes = append(clusterNodes, nodeIP)
 	}
 	sort.Strings(clusterNodes)
 
@@ -236,22 +235,4 @@ func (ns nodeSelector) String() string {
 
 func parseNodeSelector(data map[string]string) string {
 	return nodeSelector(data).String()
-}
-
-// GetNodeHostIP returns the provided node's IP, based on the priority:
-// 1. NodeInternalIP
-// 2. NodeExternalIP
-func getNodeHostIP(node *apiv1.Node) (net.IP, error) {
-	addresses := node.Status.Addresses
-	addressMap := make(map[apiv1.NodeAddressType][]apiv1.NodeAddress)
-	for i := range addresses {
-		addressMap[addresses[i].Type] = append(addressMap[addresses[i].Type], addresses[i])
-	}
-	if addresses, ok := addressMap[apiv1.NodeInternalIP]; ok {
-		return net.ParseIP(addresses[0].Address), nil
-	}
-	if addresses, ok := addressMap[apiv1.NodeExternalIP]; ok {
-		return net.ParseIP(addresses[0].Address), nil
-	}
-	return nil, fmt.Errorf("host IP unknown; known addresses: %v", addresses)
 }

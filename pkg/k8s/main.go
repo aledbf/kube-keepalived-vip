@@ -19,64 +19,11 @@ package k8s
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	api "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 )
-
-// IsValidService checks if exists a service with the specified name
-func IsValidService(kubeClient clientset.Interface, name string) (*api.Service, error) {
-	ns, name, err := ParseNameNS(name)
-	if err != nil {
-		return nil, err
-	}
-	return kubeClient.Core().Services(ns).Get(name, meta_v1.GetOptions{})
-}
-
-// IsValidConfigMap check if exists a configmap with the specified name
-func IsValidConfigMap(kubeClient clientset.Interface, fullName string) (*api.ConfigMap, error) {
-
-	ns, name, err := ParseNameNS(fullName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	configMap, err := kubeClient.Core().ConfigMaps(ns).Get(name, meta_v1.GetOptions{})
-
-	if err != nil {
-		return nil, fmt.Errorf("configmap not found: %v", err)
-	}
-
-	return configMap, nil
-
-}
-
-// IsValidNamespace chck if exists a namespace with the specified name
-func IsValidNamespace(kubeClient clientset.Interface, name string) (*api.Namespace, error) {
-	return kubeClient.Core().Namespaces().Get(name, meta_v1.GetOptions{})
-}
-
-// IsValidSecret checks if exists a secret with the specified name
-func IsValidSecret(kubeClient clientset.Interface, name string) (*api.Secret, error) {
-	ns, name, err := ParseNameNS(name)
-	if err != nil {
-		return nil, err
-	}
-	return kubeClient.Core().Secrets(ns).Get(name, meta_v1.GetOptions{})
-}
-
-// ParseNameNS parses a string searching a namespace and name
-func ParseNameNS(input string) (string, string, error) {
-	nsName := strings.Split(input, "/")
-	if len(nsName) != 2 {
-		return "", "", fmt.Errorf("invalid format (namespace/name) found in '%v'", input)
-	}
-
-	return nsName[0], nsName[1], nil
-}
 
 // GetNodeIP returns the IP address of a node in the cluster
 func GetNodeIP(kubeClient clientset.Interface, name string) string {

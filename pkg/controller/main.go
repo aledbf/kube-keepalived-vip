@@ -53,10 +53,6 @@ const (
 	resyncPeriod = 10 * time.Minute
 )
 
-var (
-	keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
-)
-
 type service struct {
 	IP   string
 	Port int
