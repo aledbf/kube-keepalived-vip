@@ -31,10 +31,6 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/aledbf/kube-keepalived-vip/pkg/k8s"
-	"github.com/aledbf/kube-keepalived-vip/pkg/store"
-	"github.com/aledbf/kube-keepalived-vip/pkg/task"
-
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -47,6 +43,10 @@ import (
 	utildbus "k8s.io/kubernetes/pkg/util/dbus"
 	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
+
+	"github.com/aledbf/kube-keepalived-vip/pkg/k8s"
+	"github.com/aledbf/kube-keepalived-vip/pkg/store"
+	"github.com/aledbf/kube-keepalived-vip/pkg/task"
 )
 
 const (
