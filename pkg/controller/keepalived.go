@@ -82,6 +82,7 @@ func (k *keepalived) WriteCfg(svcs []vip) error {
 	conf["useUnicast"] = k.useUnicast
 	conf["vrid"] = k.vrid
 	conf["proxyMode"] = k.proxyMode
+  conf["vipIsEmpty"] = len(k.vips) == 0
 
 	if glog.V(2) {
 		b, _ := json.Marshal(conf)

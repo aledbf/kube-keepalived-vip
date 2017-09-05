@@ -5,6 +5,11 @@ global_defs {
   vrrp_iptables {{ .iptablesChain }}
 }
 
+
+#Check if the VIP list is empty
+{{ if not .vipIsEmpty }}
+
+
 {{ if .proxyMode }}
 vrrp_script chk_haproxy {
   script "/haproxy-check.sh"
@@ -65,4 +70,7 @@ virtual_server {{ $svc.IP }} {{ $svc.Port }} {
   {{ end }}
 }
 {{ end }}
+{{ end }}
+
+#End if vip list is empty
 {{ end }}
