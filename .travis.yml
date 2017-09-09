@@ -11,12 +11,12 @@ notifications:
 go:
   - 1.9
 
-go_import_path: github.com/aledbf/kube-keepalived
+go_import_path: github.com/aledbf/kube-keepalived-vip
 
 env:
   global:
     # to add additional secure variables:
-    # docker run --rm caktux/travis-cli encrypt key=value -r kubernetes/ingress
+    # docker run --rm caktux/travis-cli encrypt key=value -r kube-keepalived-vip
     - RELEASE="ci-${TRAVIS_BUILD_ID}"
 
 jobs:
