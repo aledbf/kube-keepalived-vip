@@ -3,9 +3,9 @@ Kubernetes Virtual IP address/es using [keepalived](http://www.keepalived.org)
 
 AKA "how to set up virtual IP addresses in kubernetes using [IPVS - The Linux Virtual Server Project](http://www.linuxvirtualserver.org/software/ipvs.html)".
 
-[![Build Status](https://travis-ci.org/aledbf/kube-keepalived.svg?branch=master)](https://travis-ci.org/aledbf/kube-keepalived)
-[![Coverage Status](https://coveralls.io/repos/github/aledbf/kube-keepalived/badge.svg?branch=master)](https://coveralls.io/github/aledbf/kube-keepalived)
-[![Go Report Card](https://goreportcard.com/badge/github.com/aledbf/kube-keepalived)](https://goreportcard.com/report/github.com/aledbf/kube-keepalived)
+[![Build Status](https://travis-ci.org/aledbf/kube-keepalived-vip.svg?branch=master)](https://travis-ci.org/aledbf/kube-keepalived-vip)
+[![Coverage Status](https://coveralls.io/repos/github/aledbf/kube-keepalived-vip/badge.svg?branch=master)](https://coveralls.io/github/aledbf/kube-keepalived-vip)
+[![Go Report Card](https://goreportcard.com/badge/github.com/aledbf/kube-keepalived-vip)](https://goreportcard.com/report/github.com/aledbf/kube-keepalived-vip)
 
 
 ## Overview
