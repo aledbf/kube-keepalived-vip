@@ -15,9 +15,9 @@ There are 2 ways to expose a service in the current kubernetes service model:
 - Create a cloud load balancer.
 - Allocate a port (the same port) on every node in your cluster and proxy traffic through that port to the endpoints.
 
-This just works. What's the issue then? 
+This just works. What's the issue then?
 
-The issue is that it does not provide High Availability because beforehand is required to know the IP addresss of the node where is running and in case of a failure the pod can be be moved to a different node. Here is where ipvs could help. 
+The issue is that it does not provide High Availability because beforehand is required to know the IP addresss of the node where is running and in case of a failure the pod can be be moved to a different node. Here is where ipvs could help.
 The idea is to define an IP address per service to expose it outside the Kubernetes cluster and use vrrp to announce this "mapping" in the local network.
 With 2 or more instance of the pod running in the cluster is possible to provide high availabity using a single IP address.
 
@@ -33,11 +33,11 @@ This should be considered a complement, not a replacement for HAProxy or nginx. 
 
 ## Configuration
 
-To expose one or more services use the flag `services-configmap`. The format of the data is: `external IP -> namespace/serviceName`. Optionally is possible to specify forwarding method using `:` after the service name. The valid options are `NAT`, `DR` and `PROXY`. 
+To expose one or more services use the flag `services-configmap`. The format of the data is: `external IP -> namespace/serviceName`. Optionally is possible to specify forwarding method using `:` after the service name. The valid options are `NAT`, `DR` and `PROXY`.
 For instance `external IP -> namespace/serviceName:DR`.
 If the method is not specified it will use NAT.
 
-This IP must be routable inside the LAN and must be available. 
+This IP must be routable inside the LAN and must be available.
 By default the IP address of the pods are used to route the traffic. This means that is one pod dies or a new one is created by a scale event the keepalived configuration file will be updated and reloaded.
 
 ## Example
@@ -222,7 +222,7 @@ replicationcontroller "echoheaders" scaled
 ```
 
 
-````
+```
 $ kubectl exec kube-keepalived-vip-a90bt cat /etc/keepalived/keepalived.conf
 
 global_defs {
