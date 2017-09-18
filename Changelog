@@ -1,3 +1,14 @@
+## 0.20
+
+- [X] [#8](https://github.com/aledbf/kube-keepalived-vip/pull/8) Fix keepalived config file error when there are no services
+- [X] [#9](https://github.com/aledbf/kube-keepalived-vip/pull/9) Add support for travis-ci
+- [X] [#10](https://github.com/aledbf/kube-keepalived-vip/pull/10) Add badges
+- [X] [#11](https://github.com/aledbf/kube-keepalived-vip/pull/11) Fix badges
+- [X] [#17](https://github.com/aledbf/kube-keepalived-vip/pull/17) Remove unnecessary backquote and space
+- [X] [#18](https://github.com/aledbf/kube-keepalived-vip/pull/18) VRID flag not supported in keepalived.tmpl
+- [X] [#19](https://github.com/aledbf/kube-keepalived-vip/pull/19) Use vrid flag in template
+
+
 ## 0.17
 - Cleanup
 - Configmap update detection
