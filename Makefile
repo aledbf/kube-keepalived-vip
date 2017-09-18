@@ -1,7 +1,7 @@
 all: push
 
 # 0.0 shouldn't clobber any release builds
-TAG = 0.19
+TAG = 0.20
 PREFIX = aledbf/kube-keepalived-vip
 BUILD_IMAGE = build-keepalived
 PKG = github.com/aledbf/kube-keepalived-vip

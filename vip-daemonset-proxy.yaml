@@ -22,7 +22,7 @@ spec:
           volumeMounts:
             - name: haproxy
               mountPath: /etc/haproxy
-        - image: aledbf/kube-keepalived-vip:0.19
+        - image: aledbf/kube-keepalived-vip:0.20
           name: kube-keepalived-vip
           securityContext:
             privileged: true
