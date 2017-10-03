@@ -16,7 +16,7 @@ FROM gcr.io/google_containers/ubuntu-slim:0.14
 
 COPY build.sh /build.sh
 
-ENV VERSION 1.3.6
-ENV SHA256 2dc11caf653180152744449a3a096a413d852e9df5503ede2c1bb9b1d76d169f
+ENV VERSION 1.3.7
+ENV SHA256 012d9424cb6372a52bda778d911d44c324d983c4396f83d220b0605d526eafe4
 
 RUN /build.sh

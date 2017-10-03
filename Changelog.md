@@ -1,3 +1,11 @@
+## 0.22
+
+- Update keepalived to v1.3.7
+
+## 0.21
+
+- Fix template error
+
 ## 0.20
 
 - [X] [#8](https://github.com/aledbf/kube-keepalived-vip/pull/8) Fix keepalived config file error when there are no services
