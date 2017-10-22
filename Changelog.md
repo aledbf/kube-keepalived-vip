@@ -1,3 +1,7 @@
+## 0.23
+
+- Update keepalived to v1.3.9
+
 ## 0.22
 
 - Update keepalived to v1.3.7
