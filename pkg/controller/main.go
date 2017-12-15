@@ -340,7 +340,7 @@ func (ipvsc *ipvsControllerController) Stop() error {
 }
 
 // NewIPVSController creates a new controller from the given config.
-func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUnicast bool, configMapName string, vrid int, proxyMode bool) *ipvsControllerController {
+func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUnicast bool, configMapName string, vrid int, proxyMode bool, iface string) *ipvsControllerController {
 	ipvsc := ipvsControllerController{
 		client:            kubeClient,
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.5, 1),
@@ -365,15 +365,18 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 	if err != nil {
 		glog.Fatalf("Error getting local IP from nodes in the cluster: %v", err)
 	}
-
 	neighbors := getNodeNeighbors(nodeInfo, clusterNodes)
 
+        if iface == "" {
+          iface = nodeInfo.iface
+          glog.Info("No interface was provided, proceeding with the node's default: ", iface)
+        }
 	execer := utilexec.New()
 	dbus := utildbus.New()
 	iptInterface := utiliptables.New(execer, dbus, utiliptables.ProtocolIpv4)
 
 	ipvsc.keepalived = &keepalived{
-		iface:      nodeInfo.iface,
+		iface:      iface,
 		ip:         nodeInfo.ip,
 		netmask:    nodeInfo.netmask,
 		nodes:      clusterNodes,
