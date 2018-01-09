@@ -29,7 +29,9 @@ get_src()
   rm -rf "$f"
 }
 
-apt-get update && apt-get install -y --no-install-recommends \
+apt-get update && apt-get dist-upgrade -y
+
+clean-install \
   curl \
   gcc \
   libssl-dev \

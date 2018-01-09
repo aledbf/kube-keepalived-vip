@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gcr.io/google_containers/ubuntu-slim:0.14
+FROM gcr.io/google-containers/debian-base-amd64:0.3
 
 COPY build.sh /build.sh
 
-ENV VERSION 1.3.9
-ENV SHA256 6dfa0d821439f6aea699f35878d964b10b4ee263abfe3772bc3bbe09c892b841
+ENV VERSION 1.4.0
+ENV SHA256 2d8a847a6fd4bb77f7909d21d6d732f0bb13109ccc08c6fc3e1cd8d258ad3cea
+
+RUN clean-install bash
 
 RUN /build.sh
