@@ -10,7 +10,7 @@ spec:
     spec:
       hostNetwork: true
       containers:
-        - image: aledbf/kube-keepalived-vip:0.23
+        - image: aledbf/kube-keepalived-vip:0.24
           name: kube-keepalived-vip
           imagePullPolicy: Always
           securityContext:
@@ -44,5 +44,5 @@ spec:
         - name: dev
           hostPath:
             path: /dev
-      nodeSelector:
-        type: worker
+      #nodeSelector:
+      #  type: worker

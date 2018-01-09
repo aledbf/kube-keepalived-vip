@@ -1,3 +1,8 @@
+## 0.24
+
+- Update keepalived to v1.4.0
+- Change docker base image to gcr.io/google-containers/debian-base-amd64:0.3
+
 ## 0.23
 
 - Update keepalived to v1.3.9
