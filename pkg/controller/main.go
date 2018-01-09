@@ -41,8 +41,8 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 
 	utildbus "k8s.io/kubernetes/pkg/util/dbus"
-	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
+	utilexec "k8s.io/utils/exec"
 
 	"github.com/aledbf/kube-keepalived-vip/pkg/k8s"
 	"github.com/aledbf/kube-keepalived-vip/pkg/store"

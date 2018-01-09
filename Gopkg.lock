@@ -195,9 +195,9 @@
 
 [[projects]]
   name = "k8s.io/kubernetes"
-  packages = ["pkg/util/dbus","pkg/util/exec","pkg/util/iptables","pkg/util/sysctl","pkg/util/version"]
-  revision = "17d7182a7ccbb167074be7a87f0a68bd00d58d97"
-  version = "v1.7.5"
+  packages = ["pkg/util/dbus","pkg/util/iptables","pkg/util/sysctl","pkg/util/version"]
+  revision = "3a1c9449a956b6026f075fa3134ff92f7d55f812"
+  version = "v1.9.1"
 
 [[projects]]
   branch = "master"
@@ -208,6 +208,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b986c0e0ab95d373a26bc024c2d8aebe02668253bf9ad528f045a498b480dec1"
+  inputs-digest = "56d151d26ba0c94bbbadf2316fc2fe9e0dc2f72155d423fd59eed487ba0e97ea"
   solver-name = "gps-cdcl"
   solver-version = 1
