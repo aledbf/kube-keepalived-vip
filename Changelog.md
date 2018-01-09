@@ -1,3 +1,7 @@
+## 0.25
+
+- Update go dependencies
+
 ## 0.24
 
 - Update keepalived to v1.4.0
