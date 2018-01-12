@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gcr.io/google_containers/ubuntu-slim:0.14
+FROM gcr.io/google-containers/debian-base-amd64:0.3
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  libssl1.0.0 \
+RUN clean-install \
+  libssl1.1 \
   libnl-3-200 \
   libnl-route-3-200 \
   libnl-genl-3-200 \
   iptables \
+  libxtables12 \
   libnfnetlink0 \
   libiptcdata0 \
   libipset3 \
@@ -30,9 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   iproute2 \
   curl \
   ipvsadm \
-  bash && \
-  apt-get clean && \
-  rm -rf /var/lib/apt/lists/*
+  bash
 
 ADD keepalived.tar.gz /
 
