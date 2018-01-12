@@ -2,6 +2,9 @@ all: push
 
 # 0.0 shouldn't clobber any release builds
 TAG = 0.25
+HAPROXY_TAG = 0.1
+# Helm uses SemVer2 versioning
+CHART_VERSION = 0.1.0
 PREFIX = aledbf/kube-keepalived-vip
 BUILD_IMAGE = build-keepalived
 PKG = github.com/aledbf/kube-keepalived-vip
@@ -25,6 +28,20 @@ keepalived:
 
 push: container
 	docker push $(PREFIX):$(TAG)
+
+.PHONY: chart
+chart: chart/kube-keepalived-vip-$(CHART_VERSION).tgz
+
+.PHONY: chart-subst
+chart-subst: chart/kube-keepalived-vip/Chart.yaml.tmpl chart/kube-keepalived-vip/values.yaml.tmpl
+	for file in Chart.yaml values.yaml; do cp -f "chart/kube-keepalived-vip/$$file.tmpl" "chart/kube-keepalived-vip/$$file"; done
+	sed -i -e 's|%%TAG%%|$(TAG)|g' -e 's|%%HAPROXY_TAG%%|$(HAPROXY_TAG)|g' chart/kube-keepalived-vip/values.yaml
+	sed -i -e 's|%%CHART_VERSION%%|$(CHART_VERSION)|g' chart/kube-keepalived-vip/Chart.yaml
+
+# Requires helm
+chart/kube-keepalived-vip-$(CHART_VERSION).tgz: chart-subst $(shell which helm) $(shell find chart/kube-keepalived-vip -type f)
+	helm lint --strict chart/kube-keepalived-vip
+	helm package --version '$(CHART_VERSION)' -d chart chart/kube-keepalived-vip
 
 clean:
 	rm -f kube-keepalived-vip

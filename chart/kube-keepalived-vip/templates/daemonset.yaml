@@ -1,0 +1,129 @@
+---
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  labels:
+    app: {{ template "kube-keepalived-vip.name" . }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+  name: {{ template "kube-keepalived-vip.fullname" . }}
+spec:
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "kube-keepalived-vip.name" . }}
+        release: {{ .Release.Name }}
+        {{- if .Values.keepalived.podLabels }}
+{{ toYaml .Values.podLabels | indent 8}}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    {{- if .Values.keepalived.podAnnotations }}
+{{ toYaml .Values.podAnnotations | indent 8}}
+    {{- end }}
+      labels:
+        app: {{ template "kube-keepalived-vip.name" . }}
+        release: {{ .Release.Name }}
+        {{- if .Values.keepalived.podLabels }}
+{{ toYaml .Values.podLabels | indent 8}}
+        {{- end }}
+    spec:
+      hostNetwork: true
+      serviceAccountName: {{ if .Values.rbac.create }}{{ template "kube-keepalived-vip.fullname" . }}{{ else }}"{{ .Values.rbac.serviceAccountName }}"{{ end }}
+      containers:
+
+        - name: {{ template "kube-keepalived-vip.name" . }}-{{ .Values.keepalived.name }}
+          image: "{{ .Values.keepalived.image.repository }}:{{ .Values.keepalived.image.tag }}"
+          imagePullPolicy: "{{ .Values.keepalived.image.pullPolicy }}"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /lib/modules
+              name: modules
+              readOnly: true
+            - mountPath: /dev
+              name: dev
+{{- if .Values.haproxy.enabled }}
+            - mountPath: /etc/haproxy
+              name: haproxy
+{{- end }}
+          # use downward API
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          args:
+            - --services-configmap={{ .Release.Namespace }}/{{ template "kube-keepalived-vip.fullname" . }}
+            - --use-unicast={{ if .Values.keepalived.useUnicast }}true{{ else }}false{{ end }}
+            - --vrid={{ .Values.keepalived.vrid }}
+            - --logtostderr
+{{- if .Values.haproxy.enabled }}
+            - --proxy-protocol-mode=true
+{{- end }}
+        {{- if .Values.keepalived.resources }}
+          resources:
+{{ toYaml .Values.keepalived.resources | indent 12 }}
+        {{- end }}
+{{- if .Values.haproxy.enabled }}
+        - name: {{ template "kube-keepalived-vip.name" . }}-{{ .Values.haproxy.name }}
+          image: "{{ .Values.haproxy.image.repository }}:{{ .Values.haproxy.image.tag }}"
+          imagePullPolicy: "{{ .Values.haproxy.image.pullPolicy }}"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 1936
+              scheme: HTTP
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - mountPath: /etc/haproxy
+              name: haproxy
+          # use downward API
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+        {{- if .Values.haproxy.resources }}
+          resources:
+{{ toYaml .Values.haproxy.resources | indent 12 }}
+        {{- end }}
+{{- end }}
+
+      volumes:
+        - name: modules
+          hostPath:
+            path: /lib/modules
+        - name: dev
+          hostPath:
+            path: /dev
+{{- if .Values.haproxy.enabled }}
+        - name: haproxy
+          emptyDir: {}
+{{- end }}
+    {{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+    {{- end }}
+    {{- if .Values.tolerations }}
+      tolerations:
+{{ toYaml .Values.tolerations | indent 8 }}
+    {{- end }}
+
+      serviceAccountName: {{ if .Values.rbac.create }}{{ template "kube-keepalived-vip.fullname" . }}{{ else }}"{{ .Values.rbac.serviceAccountName }}"{{ end }}
+      terminationGracePeriodSeconds: 60
+{{- if .Values.updateStrategy }}
+  updateStrategy:
+{{ toYaml .Values.updateStrategy | indent 4 }}
+{{- end }}

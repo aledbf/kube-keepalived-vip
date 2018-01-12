@@ -1,0 +1,55 @@
+keepalived:
+  name: keepalived
+  image:
+    repository: aledbf/kube-keepalived-vip
+    tag: "%%TAG%%"
+    pullPolicy: IfNotPresent
+
+  # Content of the configuration ConfigMap supplied to kube-keepalive-vip
+  config: {}
+
+  # VRRP virtual router ID, must be unique on a particular network segment (0-255)
+  vrid: 179
+
+  # Resource allocations for the keepalived container
+  resources: {}
+
+haproxy:
+  # Enables the PROXY protocol feature
+  enabled: false
+
+  name: haproxy
+  image:
+    repository: aledbf/haproxy-self-reload
+    tag: "%%HAPROXY_TAG%%"
+    pullPolicy: IfNotPresent
+
+  # Resource allocations for the HAProxy container
+  resources: {}
+  
+revisionHistoryLimit: 10
+
+# Update strategy (requires at least Kubernetes 1.6)
+# A sensible policy would be:
+# updateStrategy:
+#   rollingUpdate:
+#     maxUnavailable: 1
+#   type: RollingUpdate
+updateStrategy: {}
+
+# Pod labels
+podLabels: {}
+
+# Tolerations
+tolerations: []
+
+# Node selector
+nodeSelector: {}
+
+# Pod annotations
+podAnnotations: {}
+
+rbac:
+  create: false
+  # serviceAccountName is only required when rbac.create is false
+  serviceAccountName: default

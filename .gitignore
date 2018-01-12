@@ -1,2 +1,7 @@
 rootfs/kube-keepalived-vip
 rootfs/keepalived.tar.gz
+chart/kube-keepalived-vip-*.tgz
+chart/kube-keepalived-vip/Chart.yaml
+chart/kube-keepalived-vip/values.yaml
+# Ignore backup files
+*~
