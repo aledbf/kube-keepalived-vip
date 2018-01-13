@@ -1,6 +1,7 @@
 ## 0.25
 
 - Update go dependencies
+- [X] [#8](https://github.com/aledbf/kube-keepalived-vip/pull/35) Fix keepalived dependencies
 
 ## 0.24
 

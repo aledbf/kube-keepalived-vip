@@ -81,7 +81,7 @@ func (k *keepalived) WriteCfg(svcs []vip) error {
 	conf["priority"] = k.priority
 	conf["useUnicast"] = k.useUnicast
 	conf["vrid"] = k.vrid
-        conf["iface"] = k.iface
+	conf["iface"] = k.iface
 	conf["proxyMode"] = k.proxyMode
 	conf["vipIsEmpty"] = len(k.vips) == 0
 
@@ -136,6 +136,7 @@ func (k *keepalived) Start() {
 		"--dont-fork",
 		"--log-console",
 		"--release-vips",
+		"--log-detail",
 		"--pid", "/keepalived.pid")
 
 	k.cmd.Stdout = os.Stdout
