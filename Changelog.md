@@ -1,3 +1,8 @@
+## 0.26
+
+- Fix keepalived SIGSEGV in k8s 1.9.x
+
+
 ## 0.25
 
 - Update go dependencies
