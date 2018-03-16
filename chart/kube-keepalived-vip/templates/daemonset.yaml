@@ -15,18 +15,18 @@ spec:
       labels:
         app: {{ template "kube-keepalived-vip.name" . }}
         release: {{ .Release.Name }}
-        {{- if .Values.keepalived.podLabels }}
+        {{- if .Values.podLabels }}
 {{ toYaml .Values.podLabels | indent 8}}
         {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-    {{- if .Values.keepalived.podAnnotations }}
+    {{- if .Values.podAnnotations }}
 {{ toYaml .Values.podAnnotations | indent 8}}
     {{- end }}
       labels:
         app: {{ template "kube-keepalived-vip.name" . }}
         release: {{ .Release.Name }}
-        {{- if .Values.keepalived.podLabels }}
+        {{- if .Values.podLabels }}
 {{ toYaml .Values.podLabels | indent 8}}
         {{- end }}
     spec:
@@ -61,7 +61,7 @@ spec:
                   fieldPath: metadata.namespace
           args:
             - --services-configmap={{ .Release.Namespace }}/{{ template "kube-keepalived-vip.fullname" . }}
-            - --use-unicast={{ if .Values.keepalived.useUnicast }}true{{ else }}false{{ end }}
+            - --use-unicast={{ .Values.keepalived.useUnicast }}
             - --vrid={{ .Values.keepalived.vrid }}
             - --logtostderr
 {{- if .Values.haproxy.enabled }}
