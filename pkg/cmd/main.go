@@ -76,8 +76,8 @@ var (
 		`The keepalived VRID (Virtual Router Identifier, between 0 and 255 as per 
       RFC-5798), which must be different for every Virtual Router (ie. every 
       keepalived sets) running on the same network.`)
-        
-        iface = flags.String("iface", "", `network interface to listen on. If undefined, the nodes
+
+	iface = flags.String("iface", "", `network interface to listen on. If undefined, the nodes
                  default interface will be used instead`)
 )
 
