@@ -30,21 +30,21 @@
   version = "1.0.0"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/api"
+  revision = "kubernetes-1.10.1"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/apimachinery"
+  revision = "kubernetes-1.10.1"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/client-go"
-
-[[constraint]]
-  name = "k8s.io/kubernetes"
-  version = "1.9.1"
+  revision = "kubernetes-1.10.1"
 
 [[constraint]]
   branch = "master"
   name = "k8s.io/utils"
+
+[[constraint]]
+  name = "k8s.io/kubernetes"
+  revision = "v1.10.1"
