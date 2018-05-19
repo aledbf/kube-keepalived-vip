@@ -16,8 +16,8 @@ FROM gcr.io/google-containers/debian-base-amd64:0.3
 
 COPY build.sh /build.sh
 
-ENV VERSION 31a172ff035ee957a54d49713aa42d3c9b58ad84
-ENV SHA256 f113c3e435166ea7ff6d8d6e98ece9080acbeb6f988b3c86517d7c251a693cc2
+ENV VERSION 1.4.4 
+ENV SHA256 1f4c8fbd8a2a4309af7e3f9e8449625e3078ecb3e37eff5bd7b398d42756f58d 
 
 RUN clean-install bash
 

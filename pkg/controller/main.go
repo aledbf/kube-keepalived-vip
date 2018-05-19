@@ -353,7 +353,7 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 		glog.Fatalf("Error getting POD information: %v", err)
 	}
 
-	pod, err := kubeClient.Pods(podInfo.Namespace).Get(podInfo.Name, metav1.GetOptions{})
+	pod, err := kubeClient.CoreV1().Pods(podInfo.Namespace).Get(podInfo.Name, metav1.GetOptions{})
 	if err != nil {
 		glog.Fatalf("Error getting %v: %v", podInfo.Name, err)
 	}
@@ -367,10 +367,10 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 	}
 	neighbors := getNodeNeighbors(nodeInfo, clusterNodes)
 
-        if iface == "" {
-          iface = nodeInfo.iface
-          glog.Info("No interface was provided, proceeding with the node's default: ", iface)
-        }
+	if iface == "" {
+		iface = nodeInfo.iface
+		glog.Info("No interface was provided, proceeding with the node's default: ", iface)
+	}
 	execer := utilexec.New()
 	dbus := utildbus.New()
 	iptInterface := utiliptables.New(execer, dbus, utiliptables.ProtocolIpv4)

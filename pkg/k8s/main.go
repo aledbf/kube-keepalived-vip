@@ -28,7 +28,7 @@ import (
 // GetNodeIP returns the IP address of a node in the cluster
 func GetNodeIP(kubeClient clientset.Interface, name string) string {
 	var externalIP string
-	node, err := kubeClient.Core().Nodes().Get(name, meta_v1.GetOptions{})
+	node, err := kubeClient.CoreV1().Nodes().Get(name, meta_v1.GetOptions{})
 	if err != nil {
 		return externalIP
 	}
@@ -68,7 +68,7 @@ func GetPodDetails(kubeClient clientset.Interface) (*PodInfo, error) {
 		return nil, fmt.Errorf("unable to get POD information (missing POD_NAME or POD_NAMESPACE environment variable")
 	}
 
-	pod, _ := kubeClient.Core().Pods(podNs).Get(podName, meta_v1.GetOptions{})
+	pod, _ := kubeClient.CoreV1().Pods(podNs).Get(podName, meta_v1.GetOptions{})
 	if pod == nil {
 		return nil, fmt.Errorf("unable to get POD information")
 	}

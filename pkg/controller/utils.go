@@ -144,7 +144,7 @@ func getClusterNodesIP(kubeClient *kubernetes.Clientset, nodeSelector string) (c
 		listOpts.LabelSelector = label.String()
 	}
 
-	nodes, err := kubeClient.Core().Nodes().List(listOpts)
+	nodes, err := kubeClient.CoreV1().Nodes().List(listOpts)
 	if err != nil {
 		glog.Fatalf("Error getting running nodes: %v", err)
 	}

@@ -47,7 +47,7 @@ cd /tmp
 
 # download, verify and extract the source files
 get_src $SHA256 \
-  "https://github.com/acassen/keepalived/archive/$VERSION.tar.gz"
+  "https://github.com/acassen/keepalived/archive/v$VERSION.tar.gz"
 
 cd keepalived-$VERSION
 

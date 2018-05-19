@@ -1,3 +1,8 @@
+
+## 0.27
+
+- Update keepalived to v1.4.4
+
 ## 0.26
 
 - Fix keepalived SIGSEGV in k8s 1.9.x
