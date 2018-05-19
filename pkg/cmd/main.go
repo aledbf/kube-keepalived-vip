@@ -87,6 +87,10 @@ func main() {
 
 	flag.Set("logtostderr", "true")
 
+	// Workaround for this issue:
+	// https://github.com/kubernetes/kubernetes/issues/17162
+	flag.CommandLine.Parse([]string{})
+
 	if *configMapName == "" {
 		glog.Fatalf("Please specify --services-configmap")
 	}
