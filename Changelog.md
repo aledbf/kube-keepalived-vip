@@ -1,3 +1,9 @@
+# Changelog
+
+## 0.29
+
+- Disable resync period
+
 ## 0.28
 
 - Update keepalived to v2.0.7
