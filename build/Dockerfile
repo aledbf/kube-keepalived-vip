@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gcr.io/google-containers/debian-base-amd64:0.3
+FROM quay.io/kubernetes-ingress-controller/debian-base-amd64:0.1
 
 COPY build.sh /build.sh
 
-ENV VERSION 1.4.4 
-ENV SHA256 1f4c8fbd8a2a4309af7e3f9e8449625e3078ecb3e37eff5bd7b398d42756f58d 
+ENV VERSION 2.0.7
+ENV SHA256 7a1c023ed4fb946587e3fca0d7e0214df8995d4c2862ef06f7f1ce5f9e5134c6 
 
 RUN clean-install bash
 
