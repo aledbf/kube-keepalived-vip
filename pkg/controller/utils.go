@@ -48,7 +48,10 @@ type nodeInfo struct {
 
 // getNetworkInfo returns information of the node where the pod is running
 func getNetworkInfo(ip string) (*nodeInfo, error) {
-	iface, _, mask := interfaceByIP(ip)
+	iface, mask, err := interfaceByIP(ip)
+	if err != nil {
+		return nil, err
+	}
 	return &nodeInfo{
 		iface:   iface,
 		ip:      ip,
@@ -58,12 +61,12 @@ func getNetworkInfo(ip string) (*nodeInfo, error) {
 
 // netInterfaces returns a slice containing the local network interfaces
 // excluding lo, docker0, flannel.1 and veth interfaces.
-func netInterfaces() []net.Interface {
+func netInterfaces() ([]net.Interface, error) {
 	validIfaces := []net.Interface{}
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		glog.Errorf("unexpected error obtaining network interfaces: %v", err)
-		return validIfaces
+		return validIfaces, err
 	}
 
 	for _, iface := range ifaces {
@@ -75,7 +78,7 @@ func netInterfaces() []net.Interface {
 	}
 
 	glog.V(2).Infof("network interfaces: %+v", validIfaces)
-	return validIfaces
+	return validIfaces, nil
 }
 
 type ipMask struct {
@@ -84,22 +87,26 @@ type ipMask struct {
 }
 
 // interfaceByIP returns the local network interface name that is using the
-// specified IP address. If no interface is found returns an empty string.
-func interfaceByIP(ip string) (string, string, int) {
-	for _, iface := range netInterfaces() {
+// specified IP address. If no interface is found returns an error
+func interfaceByIP(ip string) (string, int, error) {
+	ifaces, err := netInterfaces()
+	if err != nil {
+		return "", 0, err
+	}
+
+	for _, iface := range ifaces {
 		ipMasks, err := ipsByInterface(iface.Name)
 		if err != nil {
 			continue
 		}
 		for _, ipMask := range ipMasks {
 			if ip == ipMask.ip {
-				return iface.Name, ip, ipMask.mask
+				return iface.Name, ipMask.mask, nil
 			}
 		}
 	}
 
-	glog.Warningf("no interface with IP address %v detected in the node", ip)
-	return "", "", 0
+	return "", 0, fmt.Errorf("no matching interface found for IP %s", ip)
 }
 
 func ipsByInterface(name string) ([]ipMask, error) {
