@@ -50,7 +50,7 @@ import (
 )
 
 const (
-	resyncPeriod = 10 * time.Minute
+	resyncPeriod = 0
 )
 
 type service struct {
