@@ -1,10 +1,10 @@
 all: push
 
 # 0.0 shouldn't clobber any release builds
-TAG = 0.27
+TAG = 0.28
 HAPROXY_TAG = 0.1
 # Helm uses SemVer2 versioning
-CHART_VERSION = 0.1.0
+CHART_VERSION = 0.1.1
 PREFIX = aledbf/kube-keepalived-vip
 BUILD_IMAGE = build-keepalived
 PKG = github.com/aledbf/kube-keepalived-vip
@@ -67,3 +67,10 @@ cover:
 .PHONY: vet
 vet:
 	@go vet ${GO_LIST_FILES}
+
+.PHONY: dep-ensure
+dep-ensure:
+	dep version || go get -u github.com/golang/dep/cmd/dep
+	dep ensure -v
+	dep prune -v
+	find vendor -name '*_test.go' -delete

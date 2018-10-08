@@ -22,7 +22,7 @@ spec:
           volumeMounts:
             - name: haproxy
               mountPath: /etc/haproxy
-        - image: aledbf/kube-keepalived-vip:0.27
+        - image: aledbf/kube-keepalived-vip:0.28
           name: kube-keepalived-vip
           securityContext:
             privileged: true
@@ -46,11 +46,11 @@ spec:
                   fieldPath: metadata.namespace
           # to use unicast
           args:
-          - --services-configmap=default/vip-configmap
-          - --proxy-protocol-mode=true
-          # unicast uses the ip of the nodes instead of multicast
-          # this is useful if running in cloud providers (like AWS)
-          #- --use-unicast=true
+            - --services-configmap=default/vip-configmap
+            - --proxy-protocol-mode=true
+            # unicast uses the ip of the nodes instead of multicast
+            # this is useful if running in cloud providers (like AWS)
+            #- --use-unicast=true
       volumes:
         - name: modules
           hostPath:
