@@ -69,7 +69,6 @@ func (k *keepalived) WriteCfg(svcs []vip) error {
 	defer w.Close()
 
 	k.vips = getVIPs(svcs)
-	k.Cleanup()
 
 	conf := make(map[string]interface{})
 	conf["iptablesChain"] = iptablesChain
@@ -77,7 +76,7 @@ func (k *keepalived) WriteCfg(svcs []vip) error {
 	conf["myIP"] = k.ip
 	conf["netmask"] = k.netmask
 	conf["svcs"] = svcs
-	conf["vips"] = getVIPs(svcs)
+	conf["vips"] = k.vips
 	conf["nodes"] = k.neighbors
 	conf["priority"] = k.priority
 	conf["useUnicast"] = k.useUnicast
@@ -166,6 +165,7 @@ func (k *keepalived) Reload() error {
 		return nil
 	}
 
+	k.Cleanup()
 	glog.Info("reloading keepalived")
 	err := syscall.Kill(k.cmd.Process.Pid, syscall.SIGHUP)
 	if err != nil {
@@ -177,14 +177,14 @@ func (k *keepalived) Reload() error {
 
 func (k *keepalived) Cleanup() {
 	glog.Infof("Cleanup: %s", k.vips)
-        for _, vip := range k.vips {
-                k.removeVIP(vip)
-        }
+	for _, vip := range k.vips {
+		k.removeVIP(vip)
+	}
 
-        err := k.ipt.FlushChain(iptables.TableFilter, iptables.Chain(iptablesChain))
-        if err != nil {
-                glog.V(2).Infof("unexpected error flushing iptables chain %v: %v", err, iptablesChain)
-        }
+	err := k.ipt.FlushChain(iptables.TableFilter, iptables.Chain(iptablesChain))
+	if err != nil {
+		glog.V(2).Infof("unexpected error flushing iptables chain %v: %v", err, iptablesChain)
+	}
 }
 
 // Stop stop keepalived process

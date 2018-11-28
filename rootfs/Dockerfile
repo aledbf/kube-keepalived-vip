@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gcr.io/google-containers/debian-base-amd64:0.4.0
+FROM quay.io/kubernetes-ingress-controller/debian-base-amd64:0.1
 
 RUN clean-install \
   libssl1.1 \
@@ -23,7 +23,7 @@ RUN clean-install \
   libxtables12 \
   libnfnetlink0 \
   libiptcdata0 \
-  libipset3 \
+  libipset11 \
   libipset-dev \
   libsnmp30 \
   kmod \
