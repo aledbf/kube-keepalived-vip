@@ -123,6 +123,7 @@ type ipvsControllerController struct {
 	keepalived *keepalived
 
 	configMapName string
+	configMapResourceVersion string
 
 	ruMD5 string
 
@@ -259,6 +260,12 @@ func (ipvsc *ipvsControllerController) sync(key interface{}) error {
 		return fmt.Errorf("unexpected error searching configmap %v: %v", ipvsc.configMapName, err)
 	}
 
+	if ipvsc.configMapResourceVersion == cfgMap.ObjectMeta.ResourceVersion {
+		glog.V(2).Infof("No change to %s ConfigMap", name)
+		return nil
+	}
+
+	ipvsc.configMapResourceVersion = cfgMap.ObjectMeta.ResourceVersion
 	svc := ipvsc.getServices(cfgMap)
 
 	err = ipvsc.keepalived.WriteCfg(svc)
