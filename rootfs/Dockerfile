@@ -23,7 +23,7 @@ RUN clean-install \
   libxtables12 \
   libnfnetlink0 \
   libiptcdata0 \
-  libipset3 \
+  libipset11 \
   libipset-dev \
   libsnmp30 \
   kmod \

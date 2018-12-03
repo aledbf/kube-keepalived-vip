@@ -76,7 +76,7 @@ func (k *keepalived) WriteCfg(svcs []vip) error {
 	conf["myIP"] = k.ip
 	conf["netmask"] = k.netmask
 	conf["svcs"] = svcs
-	conf["vips"] = getVIPs(svcs)
+	conf["vips"] = k.vips
 	conf["nodes"] = k.neighbors
 	conf["priority"] = k.priority
 	conf["useUnicast"] = k.useUnicast
@@ -165,6 +165,7 @@ func (k *keepalived) Reload() error {
 		return nil
 	}
 
+	k.Cleanup()
 	glog.Info("reloading keepalived")
 	err := syscall.Kill(k.cmd.Process.Pid, syscall.SIGHUP)
 	if err != nil {
@@ -174,8 +175,8 @@ func (k *keepalived) Reload() error {
 	return nil
 }
 
-// Stop stop keepalived process
-func (k *keepalived) Stop() {
+func (k *keepalived) Cleanup() {
+	glog.Infof("Cleanup: %s", k.vips)
 	for _, vip := range k.vips {
 		k.removeVIP(vip)
 	}
@@ -184,20 +185,24 @@ func (k *keepalived) Stop() {
 	if err != nil {
 		glog.V(2).Infof("unexpected error flushing iptables chain %v: %v", err, iptablesChain)
 	}
+}
 
-	err = syscall.Kill(k.cmd.Process.Pid, syscall.SIGTERM)
+// Stop stop keepalived process
+func (k *keepalived) Stop() {
+	k.Cleanup()
+
+	err := syscall.Kill(k.cmd.Process.Pid, syscall.SIGTERM)
 	if err != nil {
 		glog.Errorf("error stopping keepalived: %v", err)
 	}
 }
 
-func (k *keepalived) removeVIP(vip string) error {
+func (k *keepalived) removeVIP(vip string) {
 	glog.Infof("removing configured VIP %v", vip)
 	out, err := k8sexec.New().Command("ip", "addr", "del", vip+"/32", "dev", k.iface).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("error reloading keepalived: %v\n%s", err, out)
+		glog.V(2).Infof("Error removing VIP %s: %v\n%s", vip, err, out)
 	}
-	return nil
 }
 
 func (k *keepalived) loadTemplates() error {
