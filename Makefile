@@ -1,7 +1,7 @@
 all: push
 
 # 0.0 shouldn't clobber any release builds
-TAG = 0.29
+TAG = 0.30
 HAPROXY_TAG = 0.1
 # Helm uses SemVer2 versioning
 CHART_VERSION = 0.1.1

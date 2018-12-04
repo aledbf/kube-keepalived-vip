@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.30
+
+- Update keepalived to v2.0.10
+- [#68](https://github.com/aledbf/kube-keepalived-vip/pull/68) Cleanup VIPs on startup
+- [#69](https://github.com/aledbf/kube-keepalived-vip/pull/69) Start kube-keepalived-vip via dumb-init
+
 ## 0.29
 
 - Disable resync period
