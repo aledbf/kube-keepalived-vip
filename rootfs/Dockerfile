@@ -31,7 +31,8 @@ RUN clean-install \
   iproute2 \
   curl \
   ipvsadm \
-  bash
+  bash \
+  dumb-init
 
 ADD keepalived.tar.gz /
 
@@ -41,4 +42,4 @@ RUN mkdir -p /etc/keepalived && \
 
 COPY . /
 
-ENTRYPOINT ["/kube-keepalived-vip"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/kube-keepalived-vip"]
