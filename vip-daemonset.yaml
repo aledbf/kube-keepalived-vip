@@ -10,7 +10,7 @@ spec:
     spec:
       hostNetwork: true
       containers:
-        - image: aledbf/kube-keepalived-vip:0.29
+        - image: aledbf/kube-keepalived-vip:0.30
           name: kube-keepalived-vip
           imagePullPolicy: Always
           securityContext:
