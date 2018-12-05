@@ -17,10 +17,13 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"text/template"
 
@@ -31,9 +34,10 @@ import (
 )
 
 const (
-	iptablesChain = "KUBE-KEEPALIVED-VIP"
-	keepalivedCfg = "/etc/keepalived/keepalived.conf"
-	haproxyCfg    = "/etc/haproxy/haproxy.cfg"
+	iptablesChain   = "KUBE-KEEPALIVED-VIP"
+	keepalivedCfg   = "/etc/keepalived/keepalived.conf"
+	haproxyCfg      = "/etc/haproxy/haproxy.cfg"
+	keepalivedState = "/var/run/keepalived.state"
 )
 
 var (
@@ -173,6 +177,50 @@ func (k *keepalived) Reload() error {
 	}
 
 	return nil
+}
+
+// Whether keepalived child process is currently running
+func (k *keepalived) Healthy() error {
+	b, err := ioutil.ReadFile(keepalivedState)
+	if err != nil {
+		return err
+	}
+
+	master := false
+	state := strings.TrimSpace(string(b))
+	if strings.Contains(state, "MASTER") {
+		master = true
+	}
+
+	var out bytes.Buffer
+	cmd := exec.Command("ip", "-brief", "address", "show", k.iface, "up")
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = &out
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+		Pgid:    0,
+	}
+
+	err = cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	ips := out.String()
+	glog.V(3).Infof("Status of %s interface: %s", state, ips)
+
+	for _, vip := range k.vips {
+		containsVip := strings.Contains(ips, fmt.Sprintf(" %s/32 ", vip))
+
+		if master && !containsVip {
+			return fmt.Errorf("Missing VIP %s on %s", vip, state)
+		} else if !master && containsVip {
+			return fmt.Errorf("%s should not contain VIP %s", state, vip)
+		}
+	}
+
+	// All checks successful
+        return nil
 }
 
 func (k *keepalived) Cleanup() {

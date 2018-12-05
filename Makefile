@@ -4,7 +4,7 @@ all: push
 TAG = 0.30
 HAPROXY_TAG = 0.1
 # Helm uses SemVer2 versioning
-CHART_VERSION = 0.1.1
+CHART_VERSION = 0.2.0
 PREFIX = aledbf/kube-keepalived-vip
 BUILD_IMAGE = build-keepalived
 PKG = github.com/aledbf/kube-keepalived-vip
@@ -35,8 +35,9 @@ chart: chart/kube-keepalived-vip-$(CHART_VERSION).tgz
 .PHONY: chart-subst
 chart-subst: chart/kube-keepalived-vip/Chart.yaml.tmpl chart/kube-keepalived-vip/values.yaml.tmpl
 	for file in Chart.yaml values.yaml; do cp -f "chart/kube-keepalived-vip/$$file.tmpl" "chart/kube-keepalived-vip/$$file"; done
-	sed -i -e 's|%%TAG%%|$(TAG)|g' -e 's|%%HAPROXY_TAG%%|$(HAPROXY_TAG)|g' chart/kube-keepalived-vip/values.yaml
-	sed -i -e 's|%%CHART_VERSION%%|$(CHART_VERSION)|g' chart/kube-keepalived-vip/Chart.yaml
+	sed -i'.bak' -e 's|%%TAG%%|$(TAG)|g' -e 's|%%HAPROXY_TAG%%|$(HAPROXY_TAG)|g' chart/kube-keepalived-vip/values.yaml
+	sed -i'.bak' -e 's|%%CHART_VERSION%%|$(CHART_VERSION)|g' chart/kube-keepalived-vip/Chart.yaml
+	rm -f chart/kube-keepalived-vip/*.bak
 
 # Requires helm
 chart/kube-keepalived-vip-$(CHART_VERSION).tgz: chart-subst $(shell which helm) $(shell find chart/kube-keepalived-vip -type f)
@@ -74,3 +75,4 @@ dep-ensure:
 	dep ensure -v
 	dep prune -v
 	find vendor -name '*_test.go' -delete
+

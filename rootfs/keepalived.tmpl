@@ -40,6 +40,8 @@ vrrp_instance vips {
     {{ . }}{{ end }}
   }
 
+  notify /keepalived-check.sh
+
 {{ if .proxyMode }}
   # In proxy mode there is no need to create virtual servers
   track_script {

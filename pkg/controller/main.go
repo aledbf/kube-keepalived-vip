@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"reflect"
@@ -124,6 +125,8 @@ type ipvsControllerController struct {
 
 	configMapName string
 	configMapResourceVersion string
+
+	httpPort int
 
 	ruMD5 string
 
@@ -308,6 +311,14 @@ func (ipvsc *ipvsControllerController) Start() {
 		runtime.HandleError(fmt.Errorf("timed out waiting for caches to sync"))
 	}
 
+	go func() {
+		glog.Infof("Starting HTTP server on port %d", ipvsc.httpPort)
+		err := http.ListenAndServe(fmt.Sprintf(":%d", ipvsc.httpPort), nil)
+		if err != nil {
+			glog.Error(err.Error())
+		}
+	}()
+
 	glog.Info("starting keepalived to announce VIPs")
 	ipvsc.keepalived.Start()
 }
@@ -347,11 +358,12 @@ func (ipvsc *ipvsControllerController) Stop() error {
 }
 
 // NewIPVSController creates a new controller from the given config.
-func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUnicast bool, configMapName string, vrid int, proxyMode bool, iface string) *ipvsControllerController {
+func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUnicast bool, configMapName string, vrid int, proxyMode bool, iface string, httpPort int) *ipvsControllerController {
 	ipvsc := ipvsControllerController{
 		client:            kubeClient,
 		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.5, 1),
 		configMapName:     configMapName,
+		httpPort:          httpPort,
 		stopCh:            make(chan struct{}),
 	}
 
@@ -440,6 +452,18 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 	ipvsc.mapLister.Store, ipvsc.mapController = cache.NewInformer(
 		cache.NewListWatchFromClient(ipvsc.client.CoreV1().RESTClient(), "configmaps", namespace, fields.Everything()),
 		&apiv1.ConfigMap{}, resyncPeriod, mapEventHandler)
+
+	http.HandleFunc("/health", func(rw http.ResponseWriter, req *http.Request) {
+		err := ipvsc.keepalived.Healthy()
+		if err != nil {
+			glog.Errorf("Health check unsuccessful: %v", err)
+			http.Error(rw, fmt.Sprintf("keepalived not healthy: %v", err), 500)
+			return
+		}
+
+		glog.V(3).Info("Health check successful")
+		fmt.Fprint(rw, "OK")
+	})
 
 	return &ipvsc
 }
