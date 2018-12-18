@@ -5,6 +5,7 @@ chart/kube-keepalived-vip/Chart.yaml
 chart/kube-keepalived-vip/values.yaml
 # Ignore backup files
 *~
+*.bak
 .DS_Store
 .idea/
 

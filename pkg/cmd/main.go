@@ -79,6 +79,8 @@ var (
 
 	iface = flags.String("iface", "", `network interface to listen on. If undefined, the nodes
                  default interface will be used instead`)
+
+	httpPort = flags.Int("http-port", 8080, `The HTTP port to use for health checks`)
 )
 
 func main() {
@@ -93,6 +95,10 @@ func main() {
 
 	if *configMapName == "" {
 		glog.Fatalf("Please specify --services-configmap")
+	}
+
+	if *httpPort < 0 || *httpPort > 65535 {
+		glog.Fatalf("Invalid HTTP port %d, only values between 0 and 65535 are allowed.", httpPort)
 	}
 
 	if *vrid < 0 || *vrid > 255 {
@@ -131,7 +137,7 @@ func main() {
 	}
 
 	glog.Info("starting LVS configuration")
-	ipvsc := controller.NewIPVSController(kubeClient, *watchNamespace, *useUnicast, *configMapName, *vrid, *proxyMode, *iface)
+	ipvsc := controller.NewIPVSController(kubeClient, *watchNamespace, *useUnicast, *configMapName, *vrid, *proxyMode, *iface, *httpPort)
 
 	ipvsc.Start()
 }
