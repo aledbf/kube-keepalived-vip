@@ -26,6 +26,7 @@ import (
 	"strings"
 	"syscall"
 	"text/template"
+	"time"
 
 	"github.com/golang/glog"
 
@@ -37,7 +38,9 @@ const (
 	iptablesChain   = "KUBE-KEEPALIVED-VIP"
 	keepalivedCfg   = "/etc/keepalived/keepalived.conf"
 	haproxyCfg      = "/etc/haproxy/haproxy.cfg"
+	keepalivedPid   = "/var/run/keepalived.pid"
 	keepalivedState = "/var/run/keepalived.state"
+	vrrpPid         = "/var/run/vrrp.pid"
 )
 
 var (
@@ -140,8 +143,7 @@ func (k *keepalived) Start() {
 		"--dont-fork",
 		"--log-console",
 		"--release-vips",
-		"--log-detail",
-		"--pid", "/keepalived.pid")
+		"--log-detail")
 
 	k.cmd.Stdout = os.Stdout
 	k.cmd.Stderr = os.Stderr
@@ -153,20 +155,16 @@ func (k *keepalived) Start() {
 
 	k.started = true
 
-	if err := k.cmd.Start(); err != nil {
-		glog.Errorf("keepalived error: %v", err)
-	}
-
-	if err := k.cmd.Wait(); err != nil {
-		glog.Fatalf("keepalived error: %v", err)
+	if err := k.cmd.Run(); err != nil {
+		glog.Fatalf("Error starting keepalived: %v", err)
 	}
 }
 
 // Reload sends SIGHUP to keepalived to reload the configuration.
 func (k *keepalived) Reload() error {
-	if !k.started {
-		// TODO: add a warning indicating that keepalived is not started?
-		return nil
+	glog.Info("Waiting for keepalived to start")
+	for !k.IsRunning() {
+		time.Sleep(time.Second)
 	}
 
 	k.Cleanup()
@@ -179,8 +177,31 @@ func (k *keepalived) Reload() error {
 	return nil
 }
 
-// Whether keepalived child process is currently running
+// Whether keepalived process is currently running
+func (k *keepalived) IsRunning() bool {
+	if !k.started {
+		glog.Error("keepalived not started")
+		return false
+	}
+
+	if _, err := os.Stat(keepalivedPid); os.IsNotExist(err) {
+		glog.Error("Missing keepalived.pid")
+		return false
+	}
+
+	return true
+}
+
+// Whether keepalived child process is currently running and VIPs are assigned
 func (k *keepalived) Healthy() error {
+	if !k.IsRunning() {
+		return fmt.Errorf("keepalived is not running")
+	}
+
+	if _, err := os.Stat(vrrpPid); os.IsNotExist(err) {
+		return fmt.Errorf("VRRP child process not running")
+	}
+
 	b, err := ioutil.ReadFile(keepalivedState)
 	if err != nil {
 		return err
