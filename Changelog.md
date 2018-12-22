@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.31
+
+- [#71](https://github.com/aledbf/kube-keepalived-vip/pull/71) Add health check
+- [#75](https://github.com/aledbf/kube-keepalived-vip/pull/75) Fix race condition crash on startup
+
 ## 0.30
 
 - Update keepalived to v2.0.10
