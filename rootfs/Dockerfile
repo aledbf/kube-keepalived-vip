@@ -32,6 +32,7 @@ RUN clean-install \
   curl \
   ipvsadm \
   bash \
+  jq \
   dumb-init
 
 ADD keepalived.tar.gz /
