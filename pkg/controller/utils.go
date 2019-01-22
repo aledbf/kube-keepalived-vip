@@ -253,3 +253,14 @@ func (ns nodeSelector) String() string {
 func parseNodeSelector(data map[string]string) string {
 	return nodeSelector(data).String()
 }
+
+func parseAddress(address string) (ip, iface string, err error) {
+	re := regexp.MustCompile(`^(?:\w+-)?([a-f\d.:]+)(?:@(.+))?$`)
+	matches := re.FindStringSubmatch(address)
+
+	if matches == nil {
+		return "", "", fmt.Errorf("invalid address tring: %q", address)
+	}
+
+	return matches[1], matches[2], nil
+}

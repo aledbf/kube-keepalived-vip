@@ -1,4 +1,5 @@
-{{ $iface := .iface }}{{ $netmask := .netmask }}
+{{ $netmask := .netmask }}
+{{ $cfg := . }}
 
 global_defs {
   vrrp_version 3
@@ -17,32 +18,33 @@ vrrp_script chk_haproxy {
 }
 {{ end }}
 
+{{ range $i, $iface := .ifaces }}
 vrrp_instance vips {
   state BACKUP
-  interface {{ $iface }}
-  virtual_router_id {{ .vrid }}
-  priority {{ .priority }}
+  interface {{ $iface.Name }}
+  virtual_router_id {{ $iface.Vrid }}
+  priority {{ $cfg.priority }}
   nopreempt
   advert_int 1
 
   track_interface {
-    {{ $iface }}
+    {{ $iface.Name }}
   }
 
-  {{ if .useUnicast }}
-  unicast_src_ip {{ .myIP }}
-  unicast_peer { {{ range .nodes }}
+  {{ if $cfg.useUnicast }}
+  unicast_src_ip {{ $cfg.myIP }}
+  unicast_peer { {{ range $cfg.nodes }}
     {{ . }}{{ end }}
   }
   {{ end }}
 
-  virtual_ipaddress { {{ range .vips }}
+  virtual_ipaddress { {{ range $iface.Ips }}
     {{ . }}{{ end }}
   }
 
   notify /keepalived-check.sh
 
-{{ if .proxyMode }}
+{{ if $cfg.proxyMode }}
   # In proxy mode there is no need to create virtual servers
   track_script {
     chk_haproxy weight 1
@@ -50,6 +52,7 @@ vrrp_instance vips {
 {{ end }}
 
 }
+{{ end }}
 
 {{ if not .proxyMode }}
 {{ range $i, $svc := .svcs }}

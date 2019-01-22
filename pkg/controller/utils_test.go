@@ -17,6 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -53,6 +55,58 @@ func TestParseNsSvcLVS(t *testing.T) {
 
 		if tc.ForwardMethod != lvs {
 			t.Errorf("%s: expected %v but returned %v - input %v", k, tc.ForwardMethod, lvs, tc.Input)
+		}
+	}
+}
+
+func TestParseAddress(t *testing.T) {
+	table := []struct {
+		address           string
+		wantIp, wantIface string
+		wantErr           error
+	}{
+		{
+			"1-192.168.0.1@eth0",
+			"192.168.0.1",
+			"eth0",
+			nil,
+		},
+		{
+			"1-2001:db8:85a3::8a2e:370:7334@eth0",
+			"2001:db8:85a3::8a2e:370:7334",
+			"eth0",
+			nil,
+		},
+		{
+			"192.168.0.1@eth0",
+			"192.168.0.1",
+			"eth0",
+			nil,
+		},
+		{
+			"192.168.0.1",
+			"192.168.0.1",
+			"",
+			nil,
+		},
+		{
+			"eth0",
+			"",
+			"",
+			errors.New(`invalid address tring: "eth0"`),
+		},
+	}
+
+	for i, v := range table {
+		ip, iface, err := parseAddress(v.address)
+		if ip != v.wantIp {
+			t.Errorf("Unexpected ip in %d: want: %q, got: %q", i, v.wantIp, ip)
+		}
+		if iface != v.wantIface {
+			t.Errorf("Unexpected interface name in %d: want: %q, got: %q", i, v.wantIface, iface)
+		}
+		if fmt.Sprintf("%s", v.wantErr) != fmt.Sprintf("%s", err) {
+			t.Errorf("Unexpected error in %d: want: %q, got: %q", i, v.wantErr, err)
 		}
 	}
 }
