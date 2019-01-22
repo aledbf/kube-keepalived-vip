@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"syscall"
 	"text/template"
@@ -41,6 +42,7 @@ const (
 	keepalivedPid   = "/var/run/keepalived.pid"
 	keepalivedState = "/var/run/keepalived.state"
 	vrrpPid         = "/var/run/vrrp.pid"
+	vridBase        = 100
 )
 
 var (
@@ -69,26 +71,48 @@ type keepalived struct {
 // WriteCfg creates a new keepalived configuration file.
 // In case of an error with the generation it returns the error
 func (k *keepalived) WriteCfg(svcs []vip) error {
-	w, err := os.Create(keepalivedCfg)
+	keepalivedConfig, haproxyConfig, err := k.GenerateCfg(svcs)
 	if err != nil {
 		return err
 	}
-	defer w.Close()
+
+	err = ioutil.WriteFile(keepalivedCfg, keepalivedConfig, 0644)
+	if err != nil {
+		return err
+	}
+
+	if haproxyConfig != nil {
+		err = ioutil.WriteFile(haproxyCfg, haproxyConfig, 0644)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *keepalived) GenerateCfg(svcs []vip) (keepalivedConfig, haproxyConfig []byte, err error) {
+	keepalivedBuffer := new(bytes.Buffer)
+	haproxyBuffer := new(bytes.Buffer)
 
 	k.vips = getVIPs(svcs)
 
+	ifaces, err := getIfaces(svcs)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	conf := make(map[string]interface{})
 	conf["iptablesChain"] = iptablesChain
-	conf["iface"] = k.iface
 	conf["myIP"] = k.ip
 	conf["netmask"] = k.netmask
 	conf["svcs"] = svcs
 	conf["vips"] = k.vips
+	conf["ifaces"] = ifaces
 	conf["nodes"] = k.neighbors
 	conf["priority"] = k.priority
 	conf["useUnicast"] = k.useUnicast
 	conf["vrid"] = k.vrid
-	conf["iface"] = k.iface
 	conf["proxyMode"] = k.proxyMode
 	conf["vipIsEmpty"] = len(k.vips) == 0
 
@@ -97,24 +121,19 @@ func (k *keepalived) WriteCfg(svcs []vip) error {
 		glog.Infof("%v", string(b))
 	}
 
-	err = k.keepalivedTmpl.Execute(w, conf)
+	err = k.keepalivedTmpl.Execute(keepalivedBuffer, conf)
 	if err != nil {
-		return fmt.Errorf("unexpected error creating keepalived.cfg: %v", err)
+		return nil, nil, fmt.Errorf("unexpected error creating keepalived.cfg: %v", err)
 	}
 
 	if k.proxyMode {
-		w, err := os.Create(haproxyCfg)
+		err = k.haproxyTmpl.Execute(haproxyBuffer, conf)
 		if err != nil {
-			return err
-		}
-		defer w.Close()
-		err = k.haproxyTmpl.Execute(w, conf)
-		if err != nil {
-			return fmt.Errorf("unexpected error creating haproxy.cfg: %v", err)
+			return nil, nil, fmt.Errorf("unexpected error creating haproxy.cfg: %v", err)
 		}
 	}
 
-	return nil
+	return keepalivedBuffer.Bytes(), haproxyBuffer.Bytes(), nil
 }
 
 // getVIPs returns a list of the virtual IP addresses to be used in keepalived
@@ -126,6 +145,45 @@ func getVIPs(svcs []vip) []string {
 	}
 
 	return result
+}
+
+type Iface struct {
+	Name     string
+	Vrid     int
+	Services []vip
+	Ips      []string
+}
+
+type IfaceSlice []*Iface
+
+func (c IfaceSlice) Len() int           { return len(c) }
+func (c IfaceSlice) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
+func (c IfaceSlice) Less(i, j int) bool { return c[i].Name < c[j].Name }
+
+// getVipIfaces returns a map{IP:iface, } from VIP list.
+func getIfaces(svcs []vip) ([]*Iface, error) {
+	ifaceByName := make(map[string]*Iface)
+	for _, svc := range svcs {
+		if _, ok := ifaceByName[svc.iface]; !ok {
+			ifaceByName[svc.iface] = &Iface{Name: svc.iface}
+		}
+
+		ifaceByName[svc.iface].Services = append(ifaceByName[svc.iface].Services, svc)
+		ifaceByName[svc.iface].Ips = appendIfMissing(ifaceByName[svc.iface].Ips, svc.IP)
+	}
+
+	var result IfaceSlice
+	for _, iface := range ifaceByName {
+		result = append(result, iface)
+	}
+
+	sort.Sort(result)
+
+	for i, iface := range result {
+		iface.Vrid = vridBase + i
+	}
+
+	return result, nil
 }
 
 // Start starts a keepalived process in foreground.
@@ -241,7 +299,7 @@ func (k *keepalived) Healthy() error {
 	}
 
 	// All checks successful
-        return nil
+	return nil
 }
 
 func (k *keepalived) Cleanup() {

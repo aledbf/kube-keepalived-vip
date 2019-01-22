@@ -81,6 +81,7 @@ type vip struct {
 	Port      int
 	Protocol  string
 	LVSMethod string
+	iface     string
 	Backends  []service
 }
 
@@ -123,7 +124,9 @@ type ipvsControllerController struct {
 
 	keepalived *keepalived
 
-	configMapName string
+	defaultIface string
+
+	configMapName            string
 	configMapResourceVersion string
 
 	httpPort int
@@ -185,9 +188,19 @@ func (ipvsc *ipvsControllerController) getEndpoints(
 func (ipvsc *ipvsControllerController) getServices(cfgMap *apiv1.ConfigMap) []vip {
 	svcs := []vip{}
 
-	// k -> IP to use
+	// k -> OPTIONAL_INDEX-IP_ADDRESS@OPTIONAL_INTERFACE, regexp: (\w+-)?([a-f\d.:]+)(@.+)?;
 	// v -> <namespace>/<service name>:<lvs method>
-	for externalIP, nsSvcLvs := range cfgMap.Data {
+	for address, nsSvcLvs := range cfgMap.Data {
+		externalIP, iface, err := parseAddress(address)
+		if err != nil {
+			glog.Warningf("%v", err)
+			continue
+		}
+
+		if iface == "" {
+			iface = ipvsc.defaultIface
+		}
+
 		if nsSvcLvs == "" {
 			// if target is empty string we will not forward to any service but
 			// instead just configure the IP on the machine and let it up to
@@ -199,6 +212,7 @@ func (ipvsc *ipvsControllerController) getServices(cfgMap *apiv1.ConfigMap) []vi
 				LVSMethod: "VIP",
 				Backends:  nil,
 				Protocol:  "TCP",
+				iface:     iface,
 			})
 			glog.V(2).Infof("Adding VIP only service: %v", externalIP)
 			continue
@@ -239,6 +253,7 @@ func (ipvsc *ipvsControllerController) getServices(cfgMap *apiv1.ConfigMap) []vi
 				LVSMethod: lvsm,
 				Backends:  ep,
 				Protocol:  fmt.Sprintf("%v", servicePort.Protocol),
+				iface:     iface,
 			})
 			glog.V(2).Infof("found service: %v:%v", s.Name, servicePort.Port)
 		}
@@ -359,14 +374,6 @@ func (ipvsc *ipvsControllerController) Stop() error {
 
 // NewIPVSController creates a new controller from the given config.
 func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUnicast bool, configMapName string, vrid int, proxyMode bool, iface string, httpPort int) *ipvsControllerController {
-	ipvsc := ipvsControllerController{
-		client:            kubeClient,
-		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.5, 1),
-		configMapName:     configMapName,
-		httpPort:          httpPort,
-		stopCh:            make(chan struct{}),
-	}
-
 	podInfo, err := k8s.GetPodDetails(kubeClient)
 	if err != nil {
 		glog.Fatalf("Error getting POD information: %v", err)
@@ -393,6 +400,15 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 	execer := utilexec.New()
 	dbus := utildbus.New()
 	iptInterface := utiliptables.New(execer, dbus, utiliptables.ProtocolIpv4)
+
+	ipvsc := ipvsControllerController{
+		client:            kubeClient,
+		reloadRateLimiter: flowcontrol.NewTokenBucketRateLimiter(0.5, 1),
+		defaultIface:      iface,
+		configMapName:     configMapName,
+		httpPort:          httpPort,
+		stopCh:            make(chan struct{}),
+	}
 
 	ipvsc.keepalived = &keepalived{
 		iface:      iface,
