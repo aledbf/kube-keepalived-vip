@@ -386,6 +386,8 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 	}
 	neighbors := getNodeNeighbors(nodeInfo, clusterNodes)
 
+	notify := os.Getenv("KEEPALIVED_NOTIFY")
+
 	if iface == "" {
 		iface = nodeInfo.iface
 		glog.Info("No interface was provided, proceeding with the node's default: ", iface)
@@ -405,6 +407,7 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 		ipt:        iptInterface,
 		vrid:       vrid,
 		proxyMode:  proxyMode,
+		notify:     notify,
 	}
 
 	ipvsc.syncQueue = task.NewTaskQueue(ipvsc.sync)
