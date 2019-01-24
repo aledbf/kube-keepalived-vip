@@ -65,6 +65,7 @@ type keepalived struct {
 	vrid           int
 	proxyMode      bool
 	notify         string
+	releaseVips    bool
 }
 
 // WriteCfg creates a new keepalived configuration file.
@@ -141,11 +142,12 @@ func (k *keepalived) Start() {
 		glog.V(2).Infof("chain %v already existed", iptablesChain)
 	}
 
-	k.cmd = exec.Command("keepalived",
-		"--dont-fork",
-		"--log-console",
-		"--release-vips",
-		"--log-detail")
+	args := []string{"--dont-fork", "--log-console", "--log-detail"}
+	if k.releaseVips {
+		args = append(args, "--release-vips")
+	}
+
+	k.cmd = exec.Command("keepalived", args...)
 
 	k.cmd.Stdout = os.Stdout
 	k.cmd.Stderr = os.Stderr
@@ -243,7 +245,7 @@ func (k *keepalived) Healthy() error {
 	}
 
 	// All checks successful
-        return nil
+	return nil
 }
 
 func (k *keepalived) Cleanup() {
