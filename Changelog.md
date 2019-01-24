@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.32
+
+- Update keepalived to v2.0.11
+- [#79](https://github.com/aledbf/kube-keepalived-vip/pull/79) add notify script via environment variable
+
 ## 0.31
 
 - [#71](https://github.com/aledbf/kube-keepalived-vip/pull/71) Add health check

@@ -64,6 +64,7 @@ type keepalived struct {
 	ipt            iptables.Interface
 	vrid           int
 	proxyMode      bool
+	notify         string
 }
 
 // WriteCfg creates a new keepalived configuration file.
@@ -91,6 +92,7 @@ func (k *keepalived) WriteCfg(svcs []vip) error {
 	conf["iface"] = k.iface
 	conf["proxyMode"] = k.proxyMode
 	conf["vipIsEmpty"] = len(k.vips) == 0
+	conf["notify"] = k.notify
 
 	if glog.V(2) {
 		b, _ := json.Marshal(conf)
