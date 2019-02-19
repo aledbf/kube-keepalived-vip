@@ -19,23 +19,17 @@ type VirtualIP struct {
 type VirtualIPSpec struct {
 	// IP virtual IP to use
 	IP string `json:"ip"`
-	// Port of the virtual
-	Port int `json:"port"`
 
 	// Interface interface where the virtual IP should be configured
 	// The default value is eth0
 	Interface *string `json:"interface,omitempty"`
 
-	// ProxyProtocol indicates if proxy-protocol is enabled in the service being exposed
-	ProxyProtocol bool `json:"proxyProtocol"`
-	//Protocol defines the protocol of the service. Valid values are TCP and UDP
-	Protocol corev1.Protocol `json:"protocol"`
-	// ServiceReference defines a reference to the service to expose
-	ServiceReference ServiceReference `json:"serviceReference"`
+	// ServiceReferences defines a reference to the service to expose
+	ServiceReferences []ServiceReference `json:"serviceReferences"`
 
 	// VirtualRouterID arbitrary unique number from 0 to 255.
 	// Used to differentiate multiple instances of vrrpd running on the same NIC (and hence same socket)
-	VirtualRouterID int `json:"VirtualRouterID,omitempty"`
+	VirtualRouterID int `json:"virtualRouterID,omitempty"`
 	// Priority for electing MASTER, highest priority wins
 	// To be MASTER, make this 50 more than on other machines.
 	Priority int `json:"priority,omitempty"`
@@ -44,7 +38,7 @@ type VirtualIPSpec struct {
 	DelayLoop *int `json:"delayLoop,omitempty"`
 	// LVSScheduler LVS scheduler (rr|wrr|lc|wlc|lblc|sh|mh|dh|fo|ovf|lblcr|sed|nq)
 	// Default: wlc
-	LVSScheduler *string `json:"lvsScheduler,omitempty"`
+	LVSScheduler *LVSScheduler `json:"lvsScheduler,omitempty"`
 	// LVSMethod default LVS forwarding method (NAT|DR)
 	// Default: NAT
 	LVSMethod *string `json:"lvsMethod,omitempty"`
@@ -67,8 +61,27 @@ type Status struct {
 type ServiceReference struct {
 	// Namespace is the namespace of the service
 	Namespace string `json:"namespace,omitempty"`
+
 	// Name is the name of the service
 	Name string `json:"name,omitempty"`
-	// Port of the service
-	Port intstr.IntOrString `json:"port,omitempty"`
+
+	// Ports of the service
+	// An empty list means export all the ports in the service
+	Ports []*intstr.IntOrString `json:"ports,omitempty"`
+
+	//Protocol defines the protocol of the service. Valid values are TCP and UDP
+	Protocol corev1.Protocol `json:"protocol"`
+
+	// ProxyProtocol indicates if proxy-protocol is enabled in the service being exposed
+	ProxyProtocol bool `json:"proxyProtocol"`
 }
+
+// LVSScheduler LVS scheduler (rr|wrr|lc|wlc|lblc|sh|mh|dh|fo|ovf|lblcr|sed|nq)
+type LVSScheduler string
+
+const (
+	RRScheduler  LVSScheduler = "rr"
+	WRRScheduler LVSScheduler = "wrr"
+	LCScheduler  LVSScheduler = "lc"
+	WLCScheduler LVSScheduler = "wlc"
+)
