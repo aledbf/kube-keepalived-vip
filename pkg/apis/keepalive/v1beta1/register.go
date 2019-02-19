@@ -15,8 +15,11 @@ type VirtualIP struct {
 	Status Status        `json:"status"`
 }
 
-// VirtualIPSpec defines the spec of the CRD
+// VirtualIPSpec defines the spec of the CRD in a vrrp_instance section
 type VirtualIPSpec struct {
+	// Name defines the name of the vrrp_instance
+	Name string `json:"name"`
+
 	// IP virtual IP to use
 	IP string `json:"ip"`
 
@@ -29,7 +32,7 @@ type VirtualIPSpec struct {
 
 	// VirtualRouterID arbitrary unique number from 0 to 255.
 	// Used to differentiate multiple instances of vrrpd running on the same NIC (and hence same socket)
-	VirtualRouterID int `json:"virtualRouterID,omitempty"`
+	VirtualRouterID int `json:"virtualRouterID"`
 	// Priority for electing MASTER, highest priority wins
 	// To be MASTER, make this 50 more than on other machines.
 	Priority int `json:"priority,omitempty"`
@@ -37,7 +40,7 @@ type VirtualIPSpec struct {
 	// Default: 5
 	DelayLoop *int `json:"delayLoop,omitempty"`
 	// LVSScheduler LVS scheduler (rr|wrr|lc|wlc|lblc|sh|mh|dh|fo|ovf|lblcr|sed|nq)
-	// Default: wlc
+	// Default: rr
 	LVSScheduler *LVSScheduler `json:"lvsScheduler,omitempty"`
 	// LVSMethod default LVS forwarding method (NAT|DR)
 	// Default: NAT
@@ -45,10 +48,12 @@ type VirtualIPSpec struct {
 
 	// UseUnicast defines if unicast should be used instead of multicast (default) to publish vrrp packets
 	UseUnicast bool `json:"useUnicast,omitempty"`
+
 	// Notify defines a script for ANY state transition.
 	Notify *string `json:"notify,omitempty"`
-	// ConfigurationSnippet defines additional keepalived configuration
-	ConfigurationSnippet *string `json:"configurationSnippet,omitempty"`
+
+	// AdditionalConfiguration defines additional keepalived configuration valid inside the virtual_server section
+	AdditionalConfiguration *string `json:"additionalConfiguration,omitempty"`
 }
 
 // Status reports the current state of the VirtualIP
@@ -65,14 +70,14 @@ type ServiceReference struct {
 	// Name is the name of the service
 	Name string `json:"name,omitempty"`
 
-	// Ports of the service
-	// An empty list means export all the ports in the service
-	Ports []*intstr.IntOrString `json:"ports,omitempty"`
+	// Port of the service
+	Port intstr.IntOrString `json:"port,omitempty"`
 
 	//Protocol defines the protocol of the service. Valid values are TCP and UDP
 	Protocol corev1.Protocol `json:"protocol"`
 
 	// ProxyProtocol indicates if proxy-protocol is enabled in the service being exposed
+	// Valid only for TCP protocol
 	ProxyProtocol bool `json:"proxyProtocol"`
 }
 
