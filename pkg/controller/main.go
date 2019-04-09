@@ -40,6 +40,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/flowcontrol"
+	api "k8s.io/kubernetes/pkg/apis/core"
 
 	utildbus "k8s.io/kubernetes/pkg/util/dbus"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
@@ -446,8 +447,14 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 		cache.NewListWatchFromClient(ipvsc.client.CoreV1().RESTClient(), "endpoints", namespace, fields.Everything()),
 		&apiv1.Endpoints{}, resyncPeriod, eventHandlers)
 
+	cmns, cmn, err := parseNsName(ipvsc.configMapName)
+	if err != nil {
+		glog.Fatalf("Error parsing configmap name: %v", err)
+	}
+
 	ipvsc.mapLister.Store, ipvsc.mapController = cache.NewInformer(
-		cache.NewListWatchFromClient(ipvsc.client.CoreV1().RESTClient(), "configmaps", namespace, fields.Everything()),
+		cache.NewListWatchFromClient(ipvsc.client.CoreV1().RESTClient(), "configmaps", cmns,
+			fields.OneTermEqualSelector(api.ObjectNameField, cmn)),
 		&apiv1.ConfigMap{}, resyncPeriod, mapEventHandler)
 
 	http.HandleFunc("/health", func(rw http.ResponseWriter, req *http.Request) {
