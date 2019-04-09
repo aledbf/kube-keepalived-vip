@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.33
+
+- Update keepalived to v2.0.15
+- Remove check that avoids the render of the template and comparison of the md5
+- [#72](https://github.com/aledbf/kube-keepalived-vip/pull/72) nopreempt is set along with priority weights?
+- [#87](https://github.com/aledbf/kube-keepalived-vip/issues/87) keepalived-vip v0.30 cannot be aware of the backend pod scaling
+
 ## 0.32
 
 - Update keepalived to v2.0.11
