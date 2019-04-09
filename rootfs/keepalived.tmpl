@@ -47,7 +47,7 @@ vrrp_instance vips {
 {{ if .proxyMode }}
   # In proxy mode there is no need to create virtual servers
   track_script {
-    chk_haproxy weight 1
+    chk_haproxy
   }
 {{ end }}
 
