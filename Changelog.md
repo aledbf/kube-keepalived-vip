@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.34
+
+- Only watch one configmap
+- [#81](https://github.com/aledbf/kube-keepalived-vip/issues/91) Reset IPVS after API client init 
+- [#92](https://github.com/aledbf/kube-keepalived-vip/pull/92) Add flag to make ipvs reset optional
+
 ## 0.33
 
 - Update keepalived to v2.0.15

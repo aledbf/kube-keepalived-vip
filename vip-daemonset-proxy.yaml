@@ -22,7 +22,7 @@ spec:
           volumeMounts:
             - name: haproxy
               mountPath: /etc/haproxy
-        - image: aledbf/kube-keepalived-vip:0.33
+        - image: aledbf/kube-keepalived-vip:0.34
           name: kube-keepalived-vip
           livenessProbe:
             httpGet:
