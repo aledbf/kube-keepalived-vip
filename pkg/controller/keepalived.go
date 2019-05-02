@@ -243,7 +243,7 @@ func (k *keepalived) Healthy() error {
 	}
 
 	// All checks successful
-        return nil
+	return nil
 }
 
 func (k *keepalived) Cleanup() {
