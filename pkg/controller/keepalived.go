@@ -171,7 +171,6 @@ func (k *keepalived) Reload() error {
 		time.Sleep(time.Second)
 	}
 
-	k.Cleanup()
 	glog.Info("reloading keepalived")
 	err := syscall.Kill(k.cmd.Process.Pid, syscall.SIGHUP)
 	if err != nil {
