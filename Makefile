@@ -1,7 +1,7 @@
 all: push
 
 # 0.0 shouldn't clobber any release builds
-TAG = 0.34
+TAG = 0.35
 HAPROXY_TAG = 0.1
 # Helm uses SemVer2 versioning
 CHART_VERSION = 0.2.0
@@ -68,3 +68,10 @@ cover:
 .PHONY: vet
 vet:
 	@go vet ${GO_LIST_FILES}
+
+.PHONY: dep-ensure
+dep-ensure:
+	GO111MODULE=on go mod tidy -v
+	find vendor -name '*_test.go' -delete
+	GO111MODULE=on go mod vendor
+

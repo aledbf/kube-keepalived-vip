@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.35
+
+- Update keepalived to v2.0.16
+- [#97](https://github.com/aledbf/kube-keepalived-vip/issues/97) Don't remove VIPs on reload
+
 ## 0.34
 
 - Only watch one configmap
