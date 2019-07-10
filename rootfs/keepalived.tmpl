@@ -3,6 +3,10 @@
 global_defs {
   vrrp_version 3
   vrrp_iptables {{ .iptablesChain }}
+  #get rid of warning:  default user 'keepalived_script' for script execution does not exist - please create
+  script_user root
+  enable_script_security
+
 }
 
 
