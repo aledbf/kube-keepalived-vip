@@ -261,12 +261,11 @@ func (k *keepalived) Cleanup() {
 
 // Stop stop keepalived process
 func (k *keepalived) Stop() {
-	k.Cleanup()
-
 	err := syscall.Kill(k.cmd.Process.Pid, syscall.SIGTERM)
 	if err != nil {
 		glog.Errorf("error stopping keepalived: %v", err)
 	}
+	k.Cleanup()
 }
 
 func (k *keepalived) removeVIP(vip string) {
