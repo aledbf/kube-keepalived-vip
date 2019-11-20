@@ -4,7 +4,7 @@ all: push
 TAG = 0.35
 HAPROXY_TAG = 0.1
 # Helm uses SemVer2 versioning
-CHART_VERSION = 0.2.0
+CHART_VERSION = 1.0.0
 PREFIX = aledbf/kube-keepalived-vip
 BUILD_IMAGE = build-keepalived
 PKG = github.com/aledbf/kube-keepalived-vip

@@ -1,5 +1,5 @@
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   labels:
@@ -10,6 +10,13 @@ metadata:
   name: {{ template "kube-keepalived-vip.fullname" . }}
 spec:
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app: {{ template "kube-keepalived-vip.name" . }}
+      release: {{ .Release.Name }}
+      {{- if .Values.podLabels }}
+{{ toYaml .Values.podLabels | indent 6}}
+      {{- end }}
   template:
     metadata:
       labels:
