@@ -70,6 +70,11 @@ var (
 		"net/ipv4/ip_nonlocal_bind": 1,
 		// enable connection tracking for LVS connections
 		"net/ipv4/vs/conntrack": 1,
+		//to resolve the ipvs performance issue:
+		// reference: https://github.com/kubernetes/kubernetes/issues/70747
+		//            https://github.com/cloudnativelabs/kube-router/issues/544
+		// And kube-proxy running in IPVS mode also sets conn_reuse_mode to 0.
+		"net/ipv4/vs/conn_reuse_mode": 0,
 	}
 
 	vrid = flags.Int("vrid", 50,
