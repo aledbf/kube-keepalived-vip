@@ -31,3 +31,20 @@ jobs:
         - go get github.com/modocache/gover
         - if ! go get github.com/golang/tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
         - make cover
+
+before_deploy:
+  - curl -L https://git.io/get_helm.sh | bash
+  - helm init -c
+  - git clone --branch gh-pages --depth 1 https://github.com/${TRAVIS_REPO_SLUG}.git charts/ || mkdir -p charts/
+  - make chart
+  - cp chart/*/README.md chart/*.tgz charts/
+  - helm repo index charts/
+
+deploy:
+  on:
+    tags: true
+  provider: pages
+  github_token: $GITHUB_TOKEN
+  keep_history: true
+  local_dir: charts
+  skip_cleanup: true
