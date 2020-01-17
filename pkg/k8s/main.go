@@ -81,7 +81,7 @@ func GetPodDetails(kubeClient clientset.Interface) (*PodInfo, error) {
 	}, nil
 }
 
-func SetPodLabels(kubeClient clientset.Interface,  labels map[string]string) {
+func SetPodLabels(kubeClient clientset.Interface,  labels map[string]string) nil, error{
 	podName := os.Getenv("POD_NAME")
 	podNs := os.Getenv("POD_NAMESPACE")
 
