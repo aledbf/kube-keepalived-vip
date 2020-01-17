@@ -80,3 +80,27 @@ func GetPodDetails(kubeClient clientset.Interface) (*PodInfo, error) {
 		Labels:    pod.GetLabels(),
 	}, nil
 }
+
+func SetPodLabels(kubeClient clientset.Interface,  labels map[string]string) {
+	podName := os.Getenv("POD_NAME")
+	podNs := os.Getenv("POD_NAMESPACE")
+
+	if podName == "" || podNs == "" {
+		return nil, fmt.Errorf("unable to get POD information (missing POD_NAME or POD_NAMESPACE environment variable")
+	}
+
+	pod, _ := kubeClient.CoreV1().Pods(podNs).Get(podName, meta_v1.GetOptions{})
+	if pod == nil {
+		return nil, fmt.Errorf("unable to get POD information")
+	}
+
+	for k,v := range labels {
+		pod.ObjectMeta.Labels[k] = v
+	}
+
+	podUpdate, _ := kubeClient.CoreV1().Pods(podNs).Update(pod)
+	if podUpdate == nil {
+		return nil, fmt.Errorf("unable to set labels on pod")
+	}
+
+}

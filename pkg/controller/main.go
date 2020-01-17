@@ -287,7 +287,7 @@ func (ipvsc *ipvsControllerController) sync(key interface{}) error {
 	return nil
 }
 
-// Stop stops the loadbalancer controller.
+// Start starts the loadbalancer controller.
 func (ipvsc *ipvsControllerController) Start() {
 	go ipvsc.epController.Run(ipvsc.stopCh)
 	go ipvsc.svcController.Run(ipvsc.stopCh)
@@ -466,6 +466,21 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 			return
 		}
 
+		state, err := ipvsc.keepalived.isMaster()
+		if err != nil {
+			glog.Errorf("Unable to determine keepalived state: %v", err)
+			http.Error(rw, fmt.Sprintf("keepalived not returning state: %v", err) 500)
+			return
+		}
+
+		var labels map[string]string
+		if state == true {
+			labels["vip-holder"] = "true"
+			k8s.SetPodLabels(kubeClient, labels)
+		} else {
+			labels["vip-holder"] = "false"
+			k8s.SetPodLabels(kubeClient, labels)
+		}
 		glog.V(3).Info("Health check successful")
 		fmt.Fprint(rw, "OK")
 	})

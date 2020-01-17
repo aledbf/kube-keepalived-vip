@@ -195,6 +195,19 @@ func (k *keepalived) IsRunning() bool {
 	return true
 }
 
+func isMaster() bool {
+	b, err := ioutil.ReadFile(keepalivedState)
+	if err != nil {
+		return err
+	}
+
+	if strings.Contains(state, "MASTER") {
+		return true
+	} else {
+		return false
+	}
+}
+
 // Whether keepalived child process is currently running and VIPs are assigned
 func (k *keepalived) Healthy() error {
 	if !k.IsRunning() {
