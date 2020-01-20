@@ -18,4 +18,8 @@ rules:
   - services
   - configmaps
   verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources:
+  - pods
+  verbs: ["update"]
 {{- end -}}
