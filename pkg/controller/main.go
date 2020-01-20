@@ -466,21 +466,19 @@ func NewIPVSController(kubeClient *kubernetes.Clientset, namespace string, useUn
 			return
 		}
 
-		state, err := ipvsc.keepalived.isMaster()
-		if err != nil {
-			glog.Errorf("Unable to determine keepalived state: %v", err)
-			http.Error(rw, fmt.Sprintf("keepalived not returning state: %v", err) 500)
-			return
-		}
+		state := ipvsc.keepalived.isMaster()
 
-		var labels map[string]string
+		labels := make(map[string]string)
 		if state == true {
 			labels["vip-holder"] = "true"
-			k8s.SetPodLabels(kubeClient, labels)
 		} else {
 			labels["vip-holder"] = "false"
-			k8s.SetPodLabels(kubeClient, labels)
 		}
+		podLabelSet := k8s.SetPodLabels(kubeClient, labels)
+		if podLabelSet != nil {
+			glog.V(3).Info("Unable to set pod label")
+		}
+
 		glog.V(3).Info("Health check successful")
 		fmt.Fprint(rw, "OK")
 	})
