@@ -6,25 +6,14 @@ HAPROXY_TAG = 0.1
 # Helm uses SemVer2 versioning
 CHART_VERSION = 1.0.0
 PREFIX = aledbf/kube-keepalived-vip
-BUILD_IMAGE = build-keepalived
 PKG = github.com/aledbf/kube-keepalived-vip
 
 GO_LIST_FILES=$(shell go list ${PKG}/... | grep -v vendor)
 
-controller: clean
-	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-s -w' \
-	-o rootfs/kube-keepalived-vip \
-	${PKG}/pkg/cmd
-
-container: controller keepalived
-	docker build -t $(PREFIX):$(TAG) rootfs
-
-keepalived:
-	docker build -t $(BUILD_IMAGE):$(TAG) build
-	docker create --name $(BUILD_IMAGE) $(BUILD_IMAGE):$(TAG) true
-	# docker cp semantics changed between 1.7 and 1.8, so we cp the file to cwd and rename it.
-	docker cp $(BUILD_IMAGE):/keepalived.tar.gz rootfs
-	docker rm -f $(BUILD_IMAGE)
+container:
+	# Use docker buildkit if available
+	export DOCKER_BUILDKIT=1
+	docker build -t $(PREFIX):$(TAG) .
 
 push: container
 	docker push $(PREFIX):$(TAG)
