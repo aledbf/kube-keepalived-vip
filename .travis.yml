@@ -23,7 +23,7 @@ jobs:
   include:
     - stage: Static Check
       script:
-        - go get github.com/golang/lint/golint
+        - go get golang.org/x/lint/golint
         - make fmt lint vet
     - stage: Coverage
       script:
