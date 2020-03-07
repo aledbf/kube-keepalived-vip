@@ -9,7 +9,7 @@ notifications:
   email: true
 
 go:
-  - 1.11.4
+  - '1.14'
 
 go_import_path: github.com/aledbf/kube-keepalived-vip
 
@@ -23,7 +23,7 @@ jobs:
   include:
     - stage: Static Check
       script:
-        - go get github.com/golang/lint/golint
+        - go get golang.org/x/lint/golint
         - make fmt lint vet
     - stage: Coverage
       script:
